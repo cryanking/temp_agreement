@@ -197,7 +197,7 @@ real_data  %>%arrange(Case_Number, timepoint) %>%filter(is.finite(temper) ) %>% 
 
 dev.off()
 
-real_data %>% group_by(Case_Number) %>% summarize( severe_hypo=any(predictions < 35.0 ) ) -> hypothermia_indicators
+real_data %>% group_by(Case_Number) %>% summarize( severe_hypo=any(predictions < 35.0 ), delta_1=max_loss(predictions) < -1 ) -> hypothermia_indicators
 hypothermia_indicators %>% write_csv("hypothermia_indicators.csv")
 
 
@@ -257,8 +257,8 @@ cat_vars <- c(
 )
 
 
-tab3 <- CreateTableOne(vars = c(cont_vars, cat_vars) , strata = "severe_hypo" , data = main_data   , factorVars = cat_vars,  includeNA = FALSE, argsExact=list(simulate.p.values=TRUE))
+tab3 <- CreateTableOne(vars = c(cont_vars, cat_vars) , strata = "delta_1" , data = main_data   , factorVars = cat_vars,  includeNA = FALSE, argsExact=list(simulate.p.values=TRUE))
 
-tab3 %>% print(contDigits=0, printToggle=FALSE, nonnormal=TRUE) %>% (kableExtra::kbl) %>% kableExtra::save_kable(file="table1.html")
-tab3 %>% print(contDigits=0, printToggle=FALSE, nonnormal=TRUE) %>% write.csv("table1.csv")
+tab3 %>% print(contDigits=0, printToggle=FALSE, nonnormal=TRUE, smd=TRUE) %>% (kableExtra::kbl) %>% kableExtra::save_kable(file="table1.html")
+tab3 %>% print(contDigits=0, printToggle=FALSE, nonnormal=TRUE, smd=TRUE) %>% write.csv("table1.csv")
 

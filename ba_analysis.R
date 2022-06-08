@@ -59,7 +59,7 @@ functional_longify <- function(data, indicies=NULL) {
   ## require 3/5 the first points to be present 
   data %<>% filter(  is.na(t_drager_40)+is.na(t_drager_30)+is.na(t_drager_20)+is.na(t_drager_10)+is.na(t_drager_00)  < 3 )
   
-  data %<>% select( c(one_of("Case_Number"), contains("t_drager"), , contains("t_ir"),, contains("t_oral") ) )
+  data %<>% select( c(one_of("Case_Number"), contains("t_drager"),  contains("t_ir"), contains("t_oral") ) )
   data %<>% select( -t_drager_arr,-t_drager_lve )
  
   ## filter out changes of > 1 degree in the first 10 minutes 
@@ -131,7 +131,11 @@ abline(h=drager_ir_out[["bias_avg"]] + drager_ir_out[["loa_upper"]]*c(-1,1) , co
 
 delta_data %>% filter(ir > 34) %>% filter(drager > 34) %>% mutate(x=ir, y=drager) %>% {plot(x=.$x, y=.$y, xlab="IR", ylab="Drager", main="Drager versus IR", type="p")}
 
-delta_data %>% filter(drager > 34) %>% filter(ir > 34)%>% lm(drager~ir, data=.) %>% abline(col="red")
+## repeated measures analysis
+rm_glm <- delta_data %>% filter(drager > 34) %>% filter(ir > 34)%>% lmer(drager~ir+(1|Case_Number), data=.)
+abline(a= rm_glm %>% summary %>% extract2("coefficients") %>% extract(1,1) , b=rm_glm %>% summary %>% extract2("coefficients") %>% extract(2,1) , col="red")
+
+# delta_data %>% filter(drager > 34) %>% filter(ir > 34)%>% lm(drager~ir, data=.) %>% abline(col="red")
 abline(0,1)
 dev.off()
 
@@ -147,7 +151,12 @@ abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["loa_lower"]]*c(-1,1) 
 abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["loa_upper"]]*c(-1,1) , col=mycol2)
 
 delta_data %>% filter(oral > 34) %>% filter(drager > 34) %>% mutate(x=oral, y=drager) %>% {plot(x=.$x, y=.$y, xlab="Oral", ylab="Drager", main="Drager versus Oral", type="p")}
-delta_data %>% filter(oral > 34) %>% filter(drager > 34) %>% lm(drager~oral, data=.) %>%  abline(col="red")
+
+rm_glm <- delta_data %>% filter(drager > 34) %>% filter(oral > 34)%>% lmer(drager~oral+(1|Case_Number), data=.)
+
+abline(a= rm_glm %>% summary %>% extract2("coefficients") %>% extract(1,1) , b=rm_glm %>% summary %>% extract2("coefficients") %>% extract(2,1)  , col="red")
+
+# delta_data %>% filter(oral > 34) %>% filter(drager > 34) %>% lm(drager~oral, data=.) %>%  abline(col="red")
 abline(0,1)
 
 dev.off()
@@ -164,7 +173,12 @@ abline(h=ir_oral_out[["bias_avg"]] + ir_oral_out[["loa_lower"]]*c(-1,1) , col=my
 abline(h=ir_oral_out[["bias_avg"]] + ir_oral_out[["loa_upper"]]*c(-1,1) , col=mycol2)
 
 delta_data %>% filter(oral > 34) %>% filter(ir > 34) %>% mutate(x=ir, y=oral) %>% {plot(x=.$x, y=.$y, xlab="IR", ylab="Oral", main="Oral versus IR", type="p")}
-delta_data %>% filter(oral > 34) %>% filter(ir > 34) %>% lm(oral~ir, data=.) %>%  abline(col="red")
+
+rm_glm <- delta_data %>% filter(ir > 34) %>% filter(oral > 34)%>% lmer(oral~ir+(1|Case_Number), data=.)
+
+abline(a= rm_glm %>% summary %>% extract2("coefficients") %>% extract(1,1) , b=rm_glm %>% summary %>% extract2("coefficients") %>% extract(2,1) , col="red")
+
+# delta_data %>% filter(oral > 34) %>% filter(ir > 34) %>% lm(oral~ir, data=.) %>%  abline(col="red")
 abline(0,1)
 
 dev.off()
@@ -177,6 +191,135 @@ delta_data %>% select(drager, oral, ir) %>% mutate_all( function(x){if_else(x<34
 # delta_data %>% select(drager, oral, ir) %>% mutate_all( function(x){if_else(x<34, NA_real_, x) } ) %>% as.matrix %>% cov(use="pairwise") %>% round(2)
 
 
+###############
+## same plots without the 34 degree filter
+
+jpeg("oral_ir_ba_no_filter.jpg", res=300, width=12, height=6, units="in")
+par(mfrow=c(1,2))
+delta_data  %>% mutate(x=(oral+ir)/2, y=delta3 ) %>% {plot(x=.$x, y=.$y, xlab="average", ylab="difference", main="Oral versus IR", type="p")}
+abline(h=ir_oral_out[["bias_avg"]] , col="black")
+abline(h=ir_oral_out[["bias_avg"]] + ir_oral_out[["bias_sd"]]*c(-2,2), col=mycol)
+
+abline(h=ir_oral_out[["bias_avg"]] + ir_oral_out[["loa_est"]]*c(-1,1) , col="red")
+abline(h=ir_oral_out[["bias_avg"]] + ir_oral_out[["loa_lower"]]*c(-1,1) , col=mycol2)
+abline(h=ir_oral_out[["bias_avg"]] + ir_oral_out[["loa_upper"]]*c(-1,1) , col=mycol2)
+
+delta_data  %>% mutate(x=ir, y=oral) %>% {plot(x=.$x, y=.$y, xlab="IR", ylab="Oral", main="Oral versus IR", type="p")}
+
+rm_glm <- delta_data %>% lmer(oral~ir+(1|Case_Number), data=.)
+
+abline(a= rm_glm %>% summary %>% extract2("coefficients") %>% extract(1,1) , b=rm_glm %>% summary %>% extract2("coefficients") %>% extract(2,1) , col="red")
+
+# delta_data %>% filter(oral > 34) %>% filter(ir > 34) %>% lm(oral~ir, data=.) %>%  abline(col="red")
+abline(0,1)
+
+dev.off()
 
 
- 
+
+
+
+
+ jpeg("drager_oral_ba_no_filter.jpg", res=300, width=12, height=6, units="in")
+par(mfrow=c(1,2))
+delta_data  %>% mutate(x=(drager+oral)/2, y=delta2 ) %>% {plot(x=.$x, y=.$y, xlab="average", ylab="difference", main="Drager versus oral", type="p")}
+abline(h=drager_oral_out[["bias_avg"]] , col="black")
+abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["bias_sd"]]*c(-2,2), col=mycol)
+
+abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["loa_est"]]*c(-1,1) , col="red")
+abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["loa_lower"]]*c(-1,1) , col=mycol2)
+abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["loa_upper"]]*c(-1,1) , col=mycol2)
+
+delta_data  %>% mutate(x=oral, y=drager) %>% {plot(x=.$x, y=.$y, xlab="Oral", ylab="Drager", main="Drager versus Oral", type="p")}
+
+rm_glm <- delta_data %>% lmer(drager~oral+(1|Case_Number), data=.)
+
+abline(a= rm_glm %>% summary %>% extract2("coefficients") %>% extract(1,1) , b=rm_glm %>% summary %>% extract2("coefficients") %>% extract(2,1) , col="red")
+
+# delta_data %>% filter(oral > 34) %>% filter(drager > 34) %>% lm(drager~oral, data=.) %>%  abline(col="red")
+abline(0,1)
+
+dev.off()
+
+
+
+jpeg("drager_ir_ba_no_filter.jpg", res=300, width=12, height=6, units="in")
+par(mfrow=c(1,2))
+delta_data  %>% mutate(x=(drager+ir)/2, y=delta1 ) %>% {plot(x=.$x, y=.$y, xlab="average", ylab="difference", main="Drager versus IR", type="p")}
+abline(h=drager_ir_out[["bias_avg"]] , col="black")
+abline(h=drager_ir_out[["bias_avg"]] + drager_ir_out[["bias_sd"]]*c(-2,2), col=mycol)
+
+abline(h=drager_ir_out[["bias_avg"]] + drager_ir_out[["loa_est"]]*c(-1,1) , col="red")
+abline(h=drager_ir_out[["bias_avg"]] + drager_ir_out[["loa_lower"]]*c(-1,1) , col=mycol2)
+abline(h=drager_ir_out[["bias_avg"]] + drager_ir_out[["loa_upper"]]*c(-1,1) , col=mycol2)
+
+delta_data  %>% mutate(x=ir, y=drager) %>% {plot(x=.$x, y=.$y, xlab="IR", ylab="Drager", main="Drager versus IR", type="p")}
+
+## repeated measures analysis
+rm_glm <- delta_data %>% lmer(drager~ir+(1|Case_Number), data=.)
+abline(a= rm_glm %>% summary %>% extract2("coefficients") %>% extract(1,1) , b=rm_glm %>% summary %>% extract2("coefficients") %>% extract(2,1) , col="red")
+
+# delta_data %>% filter(drager > 34) %>% filter(ir > 34)%>% lm(drager~ir, data=.) %>% abline(col="red")
+abline(0,1)
+dev.off()
+
+
+
+###################
+## reshape to calculate the change over the 30 minutes and delta of that
+delta_data %>% group_by(Case_Number) %>% summarize( across(starts_with("delta"), function(x) {last(na.omit(x) ) - first(na.omit(x))} )) -> ddeltas
+
+
+main_data %>% mutate(t_drager_00 = if_else( abs(t_drager_00-t_drager_10) > 1, t_drager_10, t_drager_00  ) ) %>% 
+mutate( drgaer_delta = t_drager_30 - t_drager_00 , ir_delta = t_ir_30 - t_ir_00, oral_delta = t_oral_30 - t_oral_00) %>% select(Case_Number, drgaer_delta, ir_delta, oral_delta) %>% mutate(Case_Number = factor(Case_Number)) %>% inner_join(ddeltas, by="Case_Number") -> ddeltas
+
+
+## this is a standard BA analysis
+semean <- function(x){sd(x, na.rm=TRUE)/sqrt(sum(is.finite(x)))}
+
+jpeg("changes_drager_ir_ba_no_filter.jpeg", res=300, width=12, height=6, units="in")
+par(mfrow=c(1,2))
+ddeltas %>% mutate(x=(drgaer_delta+ir_delta)/2, y=delta1 ) %>% {plot(x=.$x, y=.$y, xlab="average", ylab="difference", main="Drager versus IR", type="p")}
+
+abline(h=ddeltas[["delta1"]] %>% mean , col="black")
+abline(h=ddeltas[["delta1"]] %>% mean + ddeltas[["delta1"]] %>% semean %>% multiply_by(c(-2,2)), col=mycol)
+
+abline(h=ddeltas[["delta1"]] %>% mean + ddeltas[["delta1"]] %>%sd %>% multiply_by(c(-2,2)) , col="red")
+
+ddeltas  %>% mutate(x=ir_delta, y=drgaer_delta) %>% {plot(x=.$x, y=.$y, xlab="IR", ylab="Drager", main="Drager versus IR", type="p")}
+abline(0,1)
+ddeltas %>% lm(drgaer_delta~ir_delta, data=.) %>%  abline(col="red")
+
+dev.off()
+
+jpeg("changes_frager_oral_ba_no_filter.jpeg", res=300, width=12, height=6, units="in")
+par(mfrow=c(1,2))
+ddeltas %>% mutate(x=(drgaer_delta+oral_delta)/2, y=delta2 ) %>% {plot(x=.$x, y=.$y, xlab="average", ylab="difference", main="Drager versus oral", type="p")}
+
+abline(h=ddeltas[["delta2"]] %>% mean , col="black")
+abline(h=ddeltas[["delta2"]] %>% mean + ddeltas[["delta2"]] %>% semean %>% multiply_by(c(-2,2)), col=mycol)
+
+abline(h=ddeltas[["delta2"]] %>% mean + ddeltas[["delta2"]] %>%sd %>% multiply_by(c(-2,2)) , col="red")
+
+ddeltas  %>% mutate(x=oral_delta, y=drgaer_delta) %>% {plot(x=.$x, y=.$y, xlab="oral", ylab="Drager", main="Drager versus oral", type="p")}
+abline(0,1)
+ddeltas %>% lm(drgaer_delta~oral_delta, data=.) %>%  abline(col="red")
+
+dev.off()
+
+jpeg("changes_oral_ir_ba_no_filter.jpeg", res=300, width=12, height=6, units="in")
+par(mfrow=c(1,2))
+ddeltas %>% mutate(x=(oral_delta+ir_delta)/2, y=delta3 ) %>% {plot(x=.$x, y=.$y, xlab="average", ylab="difference", main="Oral versus IR", type="p")}
+
+abline(h=ddeltas[["delta3"]] %>% mean , col="black")
+abline(h=ddeltas[["delta3"]] %>% mean + ddeltas[["delta3"]] %>% semean %>% multiply_by(c(-2,2)), col=mycol)
+
+abline(h=ddeltas[["delta3"]] %>% mean + ddeltas[["delta3"]] %>%sd %>% multiply_by(c(-2,2)) , col="red")
+
+ddeltas  %>% mutate(x=oral_delta, y=ir_delta) %>% {plot(x=.$x, y=.$y, xlab="Oral", ylab="IR", main="Oral versus IR", type="p")}
+abline(0,1)
+ddeltas %>% lm(ir_delta~oral_delta, data=.) %>%  abline(col="red")
+
+dev.off()
+
+ddeltas %>% select(drgaer_delta, oral_delta, ir_delta)  %>% as.matrix %>% cor(use="pairwise") %>% round(2) %>% write.csv("pairwise_correlations_changes.csv")
