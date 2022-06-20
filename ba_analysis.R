@@ -117,23 +117,27 @@ overal_output <- bind_rows(drager_ir_out, drager_oral_out, ir_oral_out)
 
 ## pictures
 mycol <- rgb(0, 0, 0 , max = 255, alpha = 100, names = "black50")
-mycol2 <- rgb(255, 0, 0 , max = 255, alpha = 100, names = "black50")
+mycol2 <- rgb(255, 0, 0 , max = 255, alpha = 100, names = "red50")
+mycol3 <- rgb(0, 0, 255 , max = 255, alpha = 50, names = "blue25")
+
 
 jpeg("drager_ir_ba.jpg", res=300, width=12, height=6, units="in")
 par(mfrow=c(1,2))
-delta_data %>% filter(ir > 34) %>% filter(drager > 34) %>% mutate(x=(drager+ir)/2, y=delta1 ) %>% {plot(x=.$x, y=.$y, xlab="average", ylab="difference", main="Drager versus IR", type="p")}
+delta_data %>% filter(ir > 34) %>% filter(drager > 34) %>% mutate(x=(drager+ir)/2, y=delta1 ) %>% {plot(x=.$x, y=.$y, xlab="average", ylab="difference", main="Drager versus IR", type="p", xlim=c(34,39), ylim=c(-4,4))}
 abline(h=drager_ir_out[["bias_avg"]] , col="black")
 abline(h=drager_ir_out[["bias_avg"]] + drager_ir_out[["bias_sd"]]*c(-2,2), col=mycol)
 
 abline(h=drager_ir_out[["bias_avg"]] + drager_ir_out[["loa_est"]]*c(-1,1) , col="red")
 abline(h=drager_ir_out[["bias_avg"]] + drager_ir_out[["loa_lower"]]*c(-1,1) , col=mycol2)
 abline(h=drager_ir_out[["bias_avg"]] + drager_ir_out[["loa_upper"]]*c(-1,1) , col=mycol2)
+polygon(x=matrix(c(25, -.5, 50,-.5, 50, .5, 25,.5  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
 
 delta_data %>% filter(ir > 34) %>% filter(drager > 34) %>% mutate(x=ir, y=drager) %>% {plot(x=.$x, y=.$y, xlab="IR", ylab="Drager", main="Drager versus IR", type="p")}
 
 ## repeated measures analysis
 rm_glm <- delta_data %>% filter(drager > 34) %>% filter(ir > 34)%>% lmer(drager~ir+(1|Case_Number), data=.)
 abline(a= rm_glm %>% summary %>% extract2("coefficients") %>% extract(1,1) , b=rm_glm %>% summary %>% extract2("coefficients") %>% extract(2,1) , col="red")
+polygon(x=matrix(c(25,24, 50,49, 50, 51,25,26  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
 
 # delta_data %>% filter(drager > 34) %>% filter(ir > 34)%>% lm(drager~ir, data=.) %>% abline(col="red")
 abline(0,1)
@@ -142,19 +146,21 @@ dev.off()
 
  jpeg("drager_oral_ba.jpg", res=300, width=12, height=6, units="in")
 par(mfrow=c(1,2))
-delta_data  %>% filter(oral > 34) %>% filter(drager > 34) %>% mutate(x=(drager+oral)/2, y=delta2 ) %>% {plot(x=.$x, y=.$y, xlab="average", ylab="difference", main="Drager versus oral", type="p")}
+delta_data  %>% filter(oral > 34) %>% filter(drager > 34) %>% mutate(x=(drager+oral)/2, y=delta2 ) %>% {plot(x=.$x, y=.$y, xlab="average", ylab="difference", main="Drager versus oral", type="p", xlim=c(34,39), ylim=c(-4,4))}
 abline(h=drager_oral_out[["bias_avg"]] , col="black")
 abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["bias_sd"]]*c(-2,2), col=mycol)
 
 abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["loa_est"]]*c(-1,1) , col="red")
 abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["loa_lower"]]*c(-1,1) , col=mycol2)
 abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["loa_upper"]]*c(-1,1) , col=mycol2)
+polygon(x=matrix(c(25, -.5, 50,-.5, 50, .5, 25,.5  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
 
 delta_data %>% filter(oral > 34) %>% filter(drager > 34) %>% mutate(x=oral, y=drager) %>% {plot(x=.$x, y=.$y, xlab="Oral", ylab="Drager", main="Drager versus Oral", type="p")}
 
 rm_glm <- delta_data %>% filter(drager > 34) %>% filter(oral > 34)%>% lmer(drager~oral+(1|Case_Number), data=.)
 
 abline(a= rm_glm %>% summary %>% extract2("coefficients") %>% extract(1,1) , b=rm_glm %>% summary %>% extract2("coefficients") %>% extract(2,1)  , col="red")
+polygon(x=matrix(c(25,24, 50,49, 50, 51,25,26  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
 
 # delta_data %>% filter(oral > 34) %>% filter(drager > 34) %>% lm(drager~oral, data=.) %>%  abline(col="red")
 abline(0,1)
@@ -164,19 +170,21 @@ dev.off()
 
 jpeg("oral_ir_ba.jpg", res=300, width=12, height=6, units="in")
 par(mfrow=c(1,2))
-delta_data %>% filter(oral > 34) %>% filter(ir > 34) %>% mutate(x=(oral+ir)/2, y=delta3 ) %>% {plot(x=.$x, y=.$y, xlab="average", ylab="difference", main="Oral versus IR", type="p")}
+delta_data %>% filter(oral > 34) %>% filter(ir > 34) %>% mutate(x=(oral+ir)/2, y=delta3 ) %>% {plot(x=.$x, y=.$y, xlab="average", ylab="difference", main="Oral versus IR", type="p", xlim=c(34,39), ylim=c(-4,4))}
 abline(h=ir_oral_out[["bias_avg"]] , col="black")
 abline(h=ir_oral_out[["bias_avg"]] + ir_oral_out[["bias_sd"]]*c(-2,2), col=mycol)
 
 abline(h=ir_oral_out[["bias_avg"]] + ir_oral_out[["loa_est"]]*c(-1,1) , col="red")
 abline(h=ir_oral_out[["bias_avg"]] + ir_oral_out[["loa_lower"]]*c(-1,1) , col=mycol2)
 abline(h=ir_oral_out[["bias_avg"]] + ir_oral_out[["loa_upper"]]*c(-1,1) , col=mycol2)
+polygon(x=matrix(c(25, -.5, 50,-.5, 50, .5, 25,.5  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
 
 delta_data %>% filter(oral > 34) %>% filter(ir > 34) %>% mutate(x=ir, y=oral) %>% {plot(x=.$x, y=.$y, xlab="IR", ylab="Oral", main="Oral versus IR", type="p")}
 
 rm_glm <- delta_data %>% filter(ir > 34) %>% filter(oral > 34)%>% lmer(oral~ir+(1|Case_Number), data=.)
 
 abline(a= rm_glm %>% summary %>% extract2("coefficients") %>% extract(1,1) , b=rm_glm %>% summary %>% extract2("coefficients") %>% extract(2,1) , col="red")
+polygon(x=matrix(c(25,24, 50,49, 50, 51,25,26  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
 
 # delta_data %>% filter(oral > 34) %>% filter(ir > 34) %>% lm(oral~ir, data=.) %>%  abline(col="red")
 abline(0,1)
@@ -196,19 +204,21 @@ delta_data %>% select(drager, oral, ir) %>% mutate_all( function(x){if_else(x<34
 
 jpeg("oral_ir_ba_no_filter.jpg", res=300, width=12, height=6, units="in")
 par(mfrow=c(1,2))
-delta_data  %>% mutate(x=(oral+ir)/2, y=delta3 ) %>% {plot(x=.$x, y=.$y, xlab="average", ylab="difference", main="Oral versus IR", type="p")}
+delta_data  %>% mutate(x=(oral+ir)/2, y=delta3 ) %>% {plot(x=.$x, y=.$y, xlab="average", ylab="difference", main="Oral versus IR", type="p" )}
 abline(h=ir_oral_out[["bias_avg"]] , col="black")
 abline(h=ir_oral_out[["bias_avg"]] + ir_oral_out[["bias_sd"]]*c(-2,2), col=mycol)
 
 abline(h=ir_oral_out[["bias_avg"]] + ir_oral_out[["loa_est"]]*c(-1,1) , col="red")
 abline(h=ir_oral_out[["bias_avg"]] + ir_oral_out[["loa_lower"]]*c(-1,1) , col=mycol2)
 abline(h=ir_oral_out[["bias_avg"]] + ir_oral_out[["loa_upper"]]*c(-1,1) , col=mycol2)
+polygon(x=matrix(c(25, -.5, 50,-.5, 50, .5, 25,.5  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
 
 delta_data  %>% mutate(x=ir, y=oral) %>% {plot(x=.$x, y=.$y, xlab="IR", ylab="Oral", main="Oral versus IR", type="p")}
 
 rm_glm <- delta_data %>% lmer(oral~ir+(1|Case_Number), data=.)
 
 abline(a= rm_glm %>% summary %>% extract2("coefficients") %>% extract(1,1) , b=rm_glm %>% summary %>% extract2("coefficients") %>% extract(2,1) , col="red")
+polygon(x=matrix(c(25,24, 50,49, 50, 51,25,26  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
 
 # delta_data %>% filter(oral > 34) %>% filter(ir > 34) %>% lm(oral~ir, data=.) %>%  abline(col="red")
 abline(0,1)
@@ -229,12 +239,14 @@ abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["bias_sd"]]*c(-2,2), c
 abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["loa_est"]]*c(-1,1) , col="red")
 abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["loa_lower"]]*c(-1,1) , col=mycol2)
 abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["loa_upper"]]*c(-1,1) , col=mycol2)
+polygon(x=matrix(c(25, -.5, 50,-.5, 50, .5, 25,.5  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
 
 delta_data  %>% mutate(x=oral, y=drager) %>% {plot(x=.$x, y=.$y, xlab="Oral", ylab="Drager", main="Drager versus Oral", type="p")}
 
 rm_glm <- delta_data %>% lmer(drager~oral+(1|Case_Number), data=.)
 
 abline(a= rm_glm %>% summary %>% extract2("coefficients") %>% extract(1,1) , b=rm_glm %>% summary %>% extract2("coefficients") %>% extract(2,1) , col="red")
+polygon(x=matrix(c(25,24, 50,49, 50, 51,25,26  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
 
 # delta_data %>% filter(oral > 34) %>% filter(drager > 34) %>% lm(drager~oral, data=.) %>%  abline(col="red")
 abline(0,1)
@@ -252,12 +264,13 @@ abline(h=drager_ir_out[["bias_avg"]] + drager_ir_out[["bias_sd"]]*c(-2,2), col=m
 abline(h=drager_ir_out[["bias_avg"]] + drager_ir_out[["loa_est"]]*c(-1,1) , col="red")
 abline(h=drager_ir_out[["bias_avg"]] + drager_ir_out[["loa_lower"]]*c(-1,1) , col=mycol2)
 abline(h=drager_ir_out[["bias_avg"]] + drager_ir_out[["loa_upper"]]*c(-1,1) , col=mycol2)
-
+polygon(x=matrix(c(25, -.5, 50,-.5, 50, .5, 25,.5  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
 delta_data  %>% mutate(x=ir, y=drager) %>% {plot(x=.$x, y=.$y, xlab="IR", ylab="Drager", main="Drager versus IR", type="p")}
 
 ## repeated measures analysis
 rm_glm <- delta_data %>% lmer(drager~ir+(1|Case_Number), data=.)
 abline(a= rm_glm %>% summary %>% extract2("coefficients") %>% extract(1,1) , b=rm_glm %>% summary %>% extract2("coefficients") %>% extract(2,1) , col="red")
+polygon(x=matrix(c(25,24, 50,49, 50, 51,25,26  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
 
 # delta_data %>% filter(drager > 34) %>% filter(ir > 34)%>% lm(drager~ir, data=.) %>% abline(col="red")
 abline(0,1)
@@ -323,3 +336,52 @@ ddeltas %>% lm(ir_delta~oral_delta, data=.) %>%  abline(col="red")
 dev.off()
 
 ddeltas %>% select(drgaer_delta, oral_delta, ir_delta)  %>% as.matrix %>% cor(use="pairwise") %>% round(2) %>% write.csv("pairwise_correlations_changes.csv")
+
+
+library("tableone")
+
+cont_vars <- c(
+"Age"                  ,
+"Weight"               ,
+"Height"    ,
+"Gest_Age_compl_weeks" ,
+"Gest_age_actual"      ,
+"Gravidity"            ,
+"Parity" ,
+"Ambient_T_theatre"    ,
+"T_Recovery_ambient"   ,
+"Ephedrine"            ,
+"Phenyl_bolus"  ,
+"Blood loss"           ,
+"APGAR_5min" 
+)
+
+main_data %<>% mutate(across(one_of(cont_vars), as.numeric ))
+main_data[["Co-morb"]] %<>% tolower
+
+cat_vars <- c(
+"Singleton"            ,
+"Co-morb" ,
+"C/S_Urg_Cat"          ,
+"Active_Labour"        ,
+"Standard_SA_dose"     ,
+"Warming_FAW"          ,
+"Warming_Warm_Fluid"  ,
+"Oxy_Bolus"            ,
+"Oxy_infusion_intraop" ,
+"Ocy_infusion_postop"  ,
+"Phenyl_infu"          ,
+"Spinal_Level"         ,
+"Convert_GA"           ,
+"Prophyl_Phenyl_inf"   ,
+"Shivering"            ,
+"Vomiting"             ,
+"Neonate_admission"    ,
+"Neonatal_CPR"  
+)
+
+
+tab3 <- CreateTableOne(vars = c(cont_vars, cat_vars)  , data = main_data   , factorVars = cat_vars,  includeNA = FALSE, argsExact=list(simulate.p.values=TRUE))
+
+tab3 %>% print(contDigits=0, printToggle=FALSE, nonnormal=TRUE, smd=TRUE) %>% (kableExtra::kbl) %>% kableExtra::save_kable(file="table1_ba.html")
+tab3 %>% print(contDigits=0, printToggle=FALSE, nonnormal=TRUE, smd=TRUE) %>% write.csv("table1_ba.csv")
