@@ -229,9 +229,13 @@ dev.off()
 
 ## alpha lines
 
+jpeg("skipped.jpg")
+
 real_data %>% group_by(timepoint) %>% summarize(smooth_temp=mean(coldnow ) ) %>% plot(type="l", lwd=4, ylim=c(35,38), col='red', xlab="time since SA", ylab="smoothed temperature")
 
 real_data  %>%arrange(Case_Number, timepoint) %>% group_by(Case_Number) %>% group_walk( ~lines(.x$timepoint, .x$coldnow, lwd=1) )
+
+dev.off()
 
 mycol <- rgb(0, 0, 0 , maxColorValue = 255, alpha = 100, names = "black50")
 mycol2 <- rgb(255, 0, 0 , maxColorValue = 255, alpha = 80, names = "red50")
