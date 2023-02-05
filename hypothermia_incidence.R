@@ -125,7 +125,12 @@ my.boot.fun <- function(data, indicies=NULL) {
       less_1_60=mean(delta_600 < -1) , 
       hypothermia_ever= delta0 %>% add(starting_temperature) %>% is_less_than(hypothermia_threshold) %>% mean, 
       hypothermia_ever_low= delta0 %>% add(starting_temperature) %>% is_less_than(hypothermia_threshold2) %>% mean, 
-      hypothermia_60= delta_600 %>% add(starting_temperature) %>% is_less_than(hypothermia_threshold) %>% mean) %>% 
+      hypothermia_60= delta_600 %>% add(starting_temperature) %>% is_less_than(hypothermia_threshold) %>% mean
+      hypothermia_60_low= delta_600 %>% add(starting_temperature) %>% is_less_than(hypothermia_threshold2) %>% mean
+      sd_time_to_min = sd(time_to_min) ,
+      sd_delta0 = sd(delta0), 
+      sd_delta_60 = sd(delta_600)
+      ) %>% 
       unlist
   
   average_loss <- c( average_loss, measured_very_low=   modified_data %>% group_by(Case_Number) %>% summarize(very_low = any(predictions < hypothermia_threshold2, na.rm=TRUE) ) %>% summarize(mean(very_low)) %>% unlist )
@@ -144,7 +149,9 @@ my.boot.fun <- function(data, indicies=NULL) {
       less_1_60=mean(delta_600 < -1) , 
       hypothermia_ever= delta0 %>% add(starting_temperature) %>% is_less_than(hypothermia_threshold) %>% mean, 
       hypothermia_ever_low= delta0 %>% add(starting_temperature) %>% is_less_than(hypothermia_threshold2) %>% mean, 
-      hypothermia_60= delta_600 %>% add(starting_temperature) %>% is_less_than(hypothermia_threshold) %>% mean) %>% 
+      hypothermia_60= delta_600 %>% add(starting_temperature) %>% is_less_than(hypothermia_threshold) %>% mean,
+      hypothermia_60_low= delta_600 %>% add(starting_temperature) %>% is_less_than(hypothermia_threshold2) %>% mean
+) %>% 
       unlist 
   names( exclude_unmeasured) %<>% paste0("_ex")
       
@@ -181,7 +188,7 @@ re_result[[2]] %>% select(Case_Number, timepoint, predictions) %>% write_csv("sm
 
 ci_holder <- NULL
 
-used_index <- names(boot_out_re$t0 ) %>% grep(pattern="^[mp]_", invert=T)
+used_index <- names(boot_out_re$t0 ) %>% grep(pattern="^[mps]_", invert=T)
 
 for(index in  used_index) {
 #   ci_holder <- rbind( ci_holder , boot.ci(boot_out_re, index =index , type=c("perc") )$perc[ ,4:5] )
@@ -206,6 +213,41 @@ ci_measured_holder <- cbind(boot_out_re$t0[measured_index] , ci_measured_holder)
 colnames(ci_measured_holder) <- c("est", "lower.ci", "upper.ci")
 ci_measured_holder$timepoint <- names(boot_out_re$t0 ) %>% grep(pattern="^m_", value=T) %>% sub(pattern="^m_", replacement="") %>% as.numeric
 
+
+
+
+table2 <- data.frame( ci_holder)
+
+table2$est0 <- NA
+table2[ -c(1:3), "est0" ] <-  round(table2[ -c(1:3), "est" ] * nrow(re_result[[2]]) )
+table2[ -c(1:3), "est1" ] <-  paste( "(", round(table2[ -c(1:3), "est" ] * 100 ) ,"%)" )
+
+table2[ c(1), "est0" ] <- round(table2[ c(2:3), "est0" ] )
+table2[ c(1), "est1" ] <- paste( "(", ci_holder[ci_holder %>% names %>% grep(pattern="sd_t") ,1] %>% round ,")" )
+
+table2[ c(2:3), "est0" ] <- sprintf(round(table2[ c(2:3), "est0" ] , 1 ), fmt="%1.1f")
+table2[ c(2:3), "est1" ] <- paste( "(", ci_holder[ci_holder %>% names %>% grep(pattern="sd_d") ,1] %>% sprintf(fmt="%1.1f") ,")" )
+
+table2$est <- paste(table2$est0, table2$est1)
+
+table2[-c(1:3) , "ci"] <-  paste0( table2[-c(1:3) , "lower.ci"] %>% multiply_by(100) %>% round , " to " , table2[-c(1:3) , "upper.ci"] %>% multiply_by(100) %>% round , "%")
+
+table2[c(1) , "ci"] <-  paste0( table2[c(1) , "lower.ci"] %>% round , " to " , table2[c(1) , "upper.ci"]  %>% round )
+
+table2[c(2:3) , "ci"] <-  paste0( table2[c(2:3) , "lower.ci"] %>% round(1) %>% sprintf(fmt="%1.1f") , " to " , table2[c(2:3) , "upper.ci"]  %>% round(1) %>% sprintf(fmt="%1.1f") )
+
+
+
+## reorder - hard coded
+table2[ c( "less_1", "hypothermia_ever" , "hypothermia_ever_low", "delta_ever" , "less_1_60", "hypothermia_60" , "hypothermia_60_low", "delta_60"  )  ]
+
+
+table2$rname <- c("Temp decrease ≥ 1°C", "Minimum Temp < 36°C", "Maximum temperature decrease (°C)" , "Temp decrease ≥ 1°C at 60 min" , "Minimum Temp < 36°C at 60 min", "Minimum Temp < 35°C at 60 min" , "Maximum temp decrease (°C) at 60 min"  )
+
+table2$lower.ci <- NULL
+table2$upper.ci <- NULL
+table2$est0 <- NULL
+table2$est1 <- NULL
 
 
 # fake_data <- data.frame(Case_Number=re_result[[2]]$Case_Number[1], timepoint=seq(from=0, to=max_time_in_prediction, by=1) )
@@ -265,6 +307,9 @@ curve_holder2 <- cbind(seq(nrow(curve_holder))-1,boot_out_re$t0[seq(from=ncol(bo
 curve_holder2 %<>% set_colnames(c("time", "est", "lowerci", "upperci"))
 curve_holder2 %>% write.csv(file="curve_with_ci.csv", row.names=FALSE)
 
+
+
+
 library("tableone")
 hypothermia_indicators$Case_Number %<>% as.character %<>% as.numeric %<>% as.integer
 main_data$Case_Number %<>% as.character %<>% as.numeric %<>% as.integer
@@ -315,4 +360,6 @@ tab3 <- CreateTableOne(vars = c(cont_vars, cat_vars) , strata = "delta_1" , data
 
 tab3 %>% print(contDigits=0, printToggle=FALSE, nonnormal=TRUE, smd=TRUE) %>% (kableExtra::kbl) %>% kableExtra::save_kable(file="table1.html")
 tab3 %>% print(contDigits=0, printToggle=FALSE, nonnormal=TRUE, smd=TRUE) %>% write.csv("table1.csv")
+
+
 
