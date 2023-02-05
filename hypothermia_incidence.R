@@ -13,12 +13,15 @@ library(parallel)
 library(purrr)
 library(magrittr)
 
+run_large <- TRUE
+
 set.seed(101)
 
 ## this happens to get all the column types that I care about correct
 main_data <- read_csv("ob_temp_working_data.csv")  
 main_data %<>% filter(Incl_Excl == "incl")
 main_data %<>% filter( Convert_GA == 0)
+main_data %<>% filter( Age >= 18)
 
 starting_temperature <- 36.8
 hypothermia_threshold <- 36.0
@@ -115,25 +118,25 @@ my.boot.fun <- function(data, indicies=NULL) {
   average_loss <- modified_data %>% group_by(Case_Number) %>% 
     summarize(
       delta0=max_loss(predictions), delta_600 = max_loss(predictions[timepoint <= 60] ) 
-      , time_to_min = timepoint[which.min(predictions)]
+      , time_to_min_a = timepoint[which.min(predictions)]
       ) %>% 
     summarize(
-      time_to_min = mean(time_to_min) ,
+      time_to_min = mean(time_to_min_a) ,
       delta_ever=mean(delta0), 
       delta_60=mean(delta_600), 
       less_1 = mean(delta0 < -1) , 
       less_1_60=mean(delta_600 < -1) , 
       hypothermia_ever= delta0 %>% add(starting_temperature) %>% is_less_than(hypothermia_threshold) %>% mean, 
       hypothermia_ever_low= delta0 %>% add(starting_temperature) %>% is_less_than(hypothermia_threshold2) %>% mean, 
-      hypothermia_60= delta_600 %>% add(starting_temperature) %>% is_less_than(hypothermia_threshold) %>% mean
-      hypothermia_60_low= delta_600 %>% add(starting_temperature) %>% is_less_than(hypothermia_threshold2) %>% mean
-      sd_time_to_min = sd(time_to_min) ,
+      hypothermia_60= delta_600 %>% add(starting_temperature) %>% is_less_than(hypothermia_threshold) %>% mean,
+      hypothermia_60_low= delta_600 %>% add(starting_temperature) %>% is_less_than(hypothermia_threshold2) %>% mean,
+      sd_time_to_min = sd(time_to_min_a) ,
       sd_delta0 = sd(delta0), 
       sd_delta_60 = sd(delta_600)
       ) %>% 
       unlist
   
-  average_loss <- c( average_loss, measured_very_low=   modified_data %>% group_by(Case_Number) %>% summarize(very_low = any(predictions < hypothermia_threshold2, na.rm=TRUE) ) %>% summarize(mean(very_low)) %>% unlist )
+  average_loss <- c( average_loss, measured_very_low=   modified_data %>% group_by(Case_Number) %>% summarize(very_low = any(predictions < hypothermia_threshold2, na.rm=TRUE) ) %>% summarize(mean(very_low)) %>% unlist %>% as.numeric %>% unname )
 
   ## sensitivity analysis: only actually measured timepoints
   exclude_unmeasured <- modified_data %>% semi_join(data %>% filter(!is.na(temper)), by=c("Case_Number", "timepoint")) %>% group_by(Case_Number) %>% 
@@ -180,36 +183,45 @@ my.boot.fun <- function(data, indicies=NULL) {
 set.seed(101)
 re_result <- main_data %>% my.boot.fun
 
-boot_out_re <- boot(data=main_data , R=1000, statistic=my.boot.fun, sim = "ordinary" , ncpus=4L, parallel="multicore")
-saveRDS(boot_out_re, "re_boot.RDS")
-re_result %>% saveRDS("re_result.RDS")
-
-re_result[[2]] %>% select(Case_Number, timepoint, predictions) %>% write_csv("smoothed_temp.csv") 
+boot_out_re <- boot(data=main_data , R=ifelse(run_large, 1000, 100), statistic=my.boot.fun, sim = "ordinary" , ncpus=4L, parallel="multicore")
+if(run_large) {
+  saveRDS(boot_out_re, "re_boot.RDS")
+  re_result %>% saveRDS("re_result.RDS")
+  re_result[[2]] %>% select(Case_Number, timepoint, predictions) %>% write_csv("smoothed_temp.csv") 
+}
 
 ci_holder <- NULL
 
-used_index <- names(boot_out_re$t0 ) %>% grep(pattern="^[mps]_", invert=T)
+used_index <- names(boot_out_re$t0 ) %>% grep(pattern="^[mps]d?_", invert=T)
 
 for(index in  used_index) {
-#   ci_holder <- rbind( ci_holder , boot.ci(boot_out_re, index =index , type=c("perc") )$perc[ ,4:5] )
-  ci_holder <- rbind( ci_holder , boot.ci(boot_out_re, index =index , type=c("bca") )$bca[ ,4:5] )
+  if(run_large) {
+    ci_holder <- rbind( ci_holder , boot.ci(boot_out_re, index =index , type=c("bca") )$bca[ ,4:5] )
+  } else {
+    ci_holder <- rbind( ci_holder , boot.ci(boot_out_re, index =index , type=c("perc") )$perc[ ,4:5] )
+  }
 }
 
-ci_holder <- cbind(re_result[[1]], ci_holder)
+ci_holder <- cbind(re_result[[1]][used_index], ci_holder)
 colnames(ci_holder) <- c("est", "lower.ci", "upper.ci")
 rownames(ci_holder) <- names(re_result[[1]])[used_index]
 
-ci_holder %>% round(2) %>% write.csv("main_outs.csv")
+if(run_large) {
+  ci_holder %>% round(2) %>% write.csv("main_outs.csv")
+}
 
 measured_index <- names(boot_out_re$t0 ) %>% grep(pattern="^m_")
 
 ci_measured_holder <- NULL
 for(index in  measured_index) {
-  ci_measured_holder <- rbind( ci_measured_holder , boot.ci(boot_out_re, index =index , type=c("perc") )$perc[ ,4:5] )
-#   ci_measured_holder <- rbind( ci_measured_holder , boot.ci(boot_out_re, index =index , type=c("bca") )$bca[ ,4:5] )
+  if(run_large) {
+    ci_measured_holder <- rbind( ci_measured_holder , boot.ci(boot_out_re, index =index , type=c("bca") )$bca[ ,4:5] %>% round(1))
+  } else {
+    ci_measured_holder <- rbind( ci_measured_holder , boot.ci(boot_out_re, index =index , type=c("perc") )$perc[ ,4:5] %>% round(1))
+  }
 }
 
-ci_measured_holder <- cbind(boot_out_re$t0[measured_index] , ci_measured_holder) %>% as.data.frame
+ci_measured_holder <- cbind(boot_out_re$t0[measured_index] , ci_measured_holder) %>% round(1) %>% as.data.frame
 colnames(ci_measured_holder) <- c("est", "lower.ci", "upper.ci")
 ci_measured_holder$timepoint <- names(boot_out_re$t0 ) %>% grep(pattern="^m_", value=T) %>% sub(pattern="^m_", replacement="") %>% as.numeric
 
@@ -217,16 +229,19 @@ ci_measured_holder$timepoint <- names(boot_out_re$t0 ) %>% grep(pattern="^m_", v
 
 
 table2 <- data.frame( ci_holder)
+table2 <- table2[rownames(table2) %>% grep(pattern="_ex$", invert=T),]
 
 table2$est0 <- NA
-table2[ -c(1:3), "est0" ] <-  round(table2[ -c(1:3), "est" ] * nrow(re_result[[2]]) )
-table2[ -c(1:3), "est1" ] <-  paste( "(", round(table2[ -c(1:3), "est" ] * 100 ) ,"%)" )
+table2[ -c(1:3), "est0" ] <-  round(table2[ -c(1:3), "est" ] * nrow( main_data )  )
+table2[ -c(1:3), "est1" ] <-  paste0( "(", round(table2[ -c(1:3), "est" ] * 100 ) ,"%)" )
 
-table2[ c(1), "est0" ] <- round(table2[ c(2:3), "est0" ] )
-table2[ c(1), "est1" ] <- paste( "(", ci_holder[ci_holder %>% names %>% grep(pattern="sd_t") ,1] %>% round ,")" )
 
-table2[ c(2:3), "est0" ] <- sprintf(round(table2[ c(2:3), "est0" ] , 1 ), fmt="%1.1f")
-table2[ c(2:3), "est1" ] <- paste( "(", ci_holder[ci_holder %>% names %>% grep(pattern="sd_d") ,1] %>% sprintf(fmt="%1.1f") ,")" )
+
+table2[ c(1), "est0" ] <- round(table2[ c(1), "est" ] )
+table2[ c(1), "est1" ] <- paste0( "(", re_result[[1]] [ re_result[[1]]  %>% names %>% grep(pattern="sd_t") ] %>% unname %>% round ,")" )
+
+table2[ c(2:3), "est0" ] <- sprintf(round(table2[ c(2:3), "est" ] , 1 ), fmt="%1.1f")
+table2[ c(2:3), "est1" ] <- paste0( "(",  re_result[[1]] [ re_result[[1]] %>% names %>% grep(pattern="sd_d") ] %>% sprintf(fmt="%1.1f") ,")" )
 
 table2$est <- paste(table2$est0, table2$est1)
 
@@ -239,16 +254,17 @@ table2[c(2:3) , "ci"] <-  paste0( table2[c(2:3) , "lower.ci"] %>% round(1) %>% s
 
 
 ## reorder - hard coded
-table2[ c( "less_1", "hypothermia_ever" , "hypothermia_ever_low", "delta_ever" , "less_1_60", "hypothermia_60" , "hypothermia_60_low", "delta_60"  )  ]
+table2<- table2[ c( "less_1", "hypothermia_ever" , "hypothermia_ever_low", "delta_ever" , "less_1_60", "hypothermia_60" , "hypothermia_60_low", "delta_60"  ),  ]
 
 
-table2$rname <- c("Temp decrease ≥ 1°C", "Minimum Temp < 36°C", "Maximum temperature decrease (°C)" , "Temp decrease ≥ 1°C at 60 min" , "Minimum Temp < 36°C at 60 min", "Minimum Temp < 35°C at 60 min" , "Maximum temp decrease (°C) at 60 min"  )
+table2$rname <- c("Temp decrease ≥ 1°C", "Minimum Temp < 36°C", "Minimum Temp < 35°C",  "Maximum temperature decrease (°C)" , "Temp decrease ≥ 1°C at 60 min" , "Minimum Temp < 36°C at 60 min", "Minimum Temp < 35°C at 60 min" , "Maximum temp decrease (°C) at 60 min"  )
 
 table2$lower.ci <- NULL
 table2$upper.ci <- NULL
 table2$est0 <- NULL
 table2$est1 <- NULL
 
+table2 %>% write_csv("table2.csv")
 
 # fake_data <- data.frame(Case_Number=re_result[[2]]$Case_Number[1], timepoint=seq(from=0, to=max_time_in_prediction, by=1) )
 # fake_data %<>% bind_cols(fake_data$timepoint %>% bs_fun %>%  as.data.frame %>% set_colnames( colnames(re_result[[2]]) %>% keep( ~grepl(.x, pattern="^ts")) )  )
