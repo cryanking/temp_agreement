@@ -18,11 +18,14 @@ run_large <- TRUE
 set.seed(101)
 
 ## this happens to get all the column types that I care about correct
-main_data <- read_csv("ob_temp_working_data.csv")  
-main_data %<>% filter(Incl_Excl == "incl")
+# main_data <- read_csv("ob_temp_working_data.csv")  
+main_data <- read_csv("Obs_Temp_Master.csv")  
+
+# main_data %<>% filter(Incl_Excl == "incl")
+main_data %<>% filter( !grepl(Incl_Excl , pattern= "^exc") )
 main_data %<>% filter( Convert_GA == 0)
 main_data %<>% filter( Age >= 18)
-
+main_data %<>% rename(T_Drager_00 =B_Drager_T)
 starting_temperature <- 36.8
 hypothermia_threshold <- 36.0
 hypothermia_threshold2 <- 35.0 
@@ -40,20 +43,20 @@ functional_longify <- function(data, indicies=NULL) {
   }
   
   ## require the first 3/5 points to be present - could loose this later
-  data %<>% filter(  is.na(t_drager_40)+is.na(t_drager_30)+is.na(t_drager_20)+is.na(t_drager_10)+is.na(t_drager_00)  < 3 )
+  data %<>% filter(  is.na(T_Drager_40)+is.na(T_Drager_30)+is.na(T_Drager_20)+is.na(T_Drager_10)+is.na(T_Drager_00)  < 3 )
 
   if(use_pacu){
-    pacu_data <- data %>% select( one_of("Case_Number", "t_drager_arr", "t_drager_lve", "t_SA", "t_rec_arrival", "t_rec_leave") ) 
+    pacu_data <- data %>% select( one_of("Case_Number", "T_Drager_Rec_Arrival", "T_Drager_Leaving", "t_SA", "t_rec_arrival", "t_rec_leave") ) 
   } 
   
-  data %<>% select( c(one_of("Case_Number"), contains("t_drager_") ) )
-  data %<>% select( -t_drager_arr,-t_drager_lve )
+  data %<>% select( c(one_of("Case_Number"), contains("T_Drager_") ) )
+  data %<>% select( -T_Drager_Rec_Arrival,-T_Drager_Leaving )
 
   
   ## filter out changes of > 1 degree in the first 10 minutes 
-  data %<>% mutate(t_drager_00 = if_else( abs(t_drager_00-t_drager_10) > 1, t_drager_10, t_drager_00  ) )
+  data %<>% mutate(T_Drager_00 = if_else( abs(T_Drager_00-T_Drager_10) > 1, T_Drager_10, T_Drager_00  ) )
 
-  data %<>% pivot_longer(cols=contains("t_drager_"), names_to="timepoint", names_prefix="t_drager_",values_to="temper")
+  data %<>% pivot_longer(cols=contains("T_Drager_"), names_to="timepoint", names_prefix="T_Drager_",values_to="temper")
   data$timepoint %<>% as.numeric
 
   ## join in the pacu observations
@@ -61,8 +64,8 @@ functional_longify <- function(data, indicies=NULL) {
     pacu_data %<>% mutate(t_rec_leave = difftime(t_rec_leave , t_SA, units="mins") %>% as.numeric,  t_rec_arrival=difftime(t_rec_arrival , t_SA, units="mins") %>% as.numeric)
 
     data <- bind_rows(data,  
-      pacu_data %>% select(Case_Number, temper=t_drager_arr, timepoint=t_rec_arrival) , 
-      pacu_data %>% select(Case_Number, temper=t_drager_lve, timepoint=t_rec_leave)  
+      pacu_data %>% select(Case_Number, temper=T_Drager_Rec_Arrival, timepoint=t_rec_arrival) , 
+      pacu_data %>% select(Case_Number, temper=T_Drager_Leaving, timepoint=t_rec_leave)  
     )
   }
   
@@ -182,6 +185,8 @@ my.boot.fun <- function(data, indicies=NULL) {
 
 set.seed(101)
 re_result <- main_data %>% my.boot.fun
+
+main_data %>% functional_longify %>% filter(is.finite(temper)) %>% distinct(Case_Number, timepoint) %>%  summarize(n_distinct(Case_Number), n())
 
 boot_out_re <- boot(data=main_data , R=ifelse(run_large, 1000, 100), statistic=my.boot.fun, sim = "ordinary" , ncpus=4L, parallel="multicore")
 if(run_large) {
@@ -330,6 +335,7 @@ library("tableone")
 hypothermia_indicators$Case_Number %<>% as.character %<>% as.numeric %<>% as.integer
 main_data$Case_Number %<>% as.character %<>% as.numeric %<>% as.integer
 main_data %<>% left_join(hypothermia_indicators, by="Case_Number")
+main_data %<>% mutate(Ephedrine = sub(Ephedrine, pattern="mg", replacement="") %>% as.numeric )
 
 cont_vars <- c(
 "Age"                  ,
