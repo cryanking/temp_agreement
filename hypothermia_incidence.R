@@ -279,6 +279,45 @@ table2$est1 <- NULL
 
 table2 %>% write_csv("table2.csv")
 
+
+table2 <- data.frame( ci_holder)
+table2 <- table2[rownames(table2) %>% grep(pattern="_ex$", invert=F),]
+
+table2$est0 <- NA
+table2[ -c(1:3), "est0" ] <-  round(table2[ -c(1:3), "est" ] * nrow( main_data )  )
+table2[ -c(1:3), "est1" ] <-  paste0( "(", round(table2[ -c(1:3), "est" ] * 100 ) ,"%)" )
+
+
+
+table2[ c(1), "est0" ] <- round(table2[ c(1), "est" ] )
+table2[ c(1), "est1" ] <- paste0( "(", re_result[[1]] [ re_result[[1]]  %>% names %>% grep(pattern="sd_t") ] %>% unname %>% round ,")" )
+
+table2[ c(2:3), "est0" ] <- sprintf(round(table2[ c(2:3), "est" ] , 1 ), fmt="%1.1f")
+table2[ c(2:3), "est1" ] <- paste0( "(",  re_result[[1]] [ re_result[[1]] %>% names %>% grep(pattern="sd_d") ] %>% sprintf(fmt="%1.1f") ,")" )
+
+table2$est <- paste(table2$est0, table2$est1)
+
+table2[-c(1:3) , "ci"] <-  paste0( table2[-c(1:3) , "lower.ci"] %>% multiply_by(100) %>% round , " to " , table2[-c(1:3) , "upper.ci"] %>% multiply_by(100) %>% round , "%")
+
+table2[c(1) , "ci"] <-  paste0( table2[c(1) , "lower.ci"] %>% round , " to " , table2[c(1) , "upper.ci"]  %>% round )
+
+table2[c(2:3) , "ci"] <-  paste0( table2[c(2:3) , "lower.ci"] %>% round(1) %>% sprintf(fmt="%1.1f") , " to " , table2[c(2:3) , "upper.ci"]  %>% round(1) %>% sprintf(fmt="%1.1f") )
+
+rownames(table2) <- rownames(table2) %>% sub(pattern="_ex$", replacement="")
+
+## reorder - hard coded
+table2<- table2[ c( "less_1", "hypothermia_ever" , "hypothermia_ever_low", "delta_ever" , "less_1_60", "hypothermia_60" , "hypothermia_60_low", "delta_60"  ),  ]
+
+
+table2$rname <- c("Temp decrease ≥ 1°C", "Minimum Temp < 36°C", "Minimum Temp < 35°C",  "Maximum temperature decrease (°C)" , "Temp decrease ≥ 1°C at 60 min" , "Minimum Temp < 36°C at 60 min", "Minimum Temp < 35°C at 60 min" , "Maximum temp decrease (°C) at 60 min"  )
+
+table2$lower.ci <- NULL
+table2$upper.ci <- NULL
+table2$est0 <- NULL
+table2$est1 <- NULL
+table2%>% select(rname, everything()) %>% write_csv("table2b.csv")
+
+
 # fake_data <- data.frame(Case_Number=re_result[[2]]$Case_Number[1], timepoint=seq(from=0, to=max_time_in_prediction, by=1) )
 # fake_data %<>% bind_cols(fake_data$timepoint %>% bs_fun %>%  as.data.frame %>% set_colnames( colnames(re_result[[2]]) %>% keep( ~grepl(.x, pattern="^ts")) )  )
 # 
