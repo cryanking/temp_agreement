@@ -21,10 +21,18 @@ set.seed(101)
 # main_data <- read_csv("ob_temp_working_data.csv")  
 main_data <- read_csv("Obs_Temp_Master.csv")  
 
-# main_data %<>% filter(Incl_Excl == "incl")
-main_data %<>% filter( !grepl(Incl_Excl , pattern= "^exc") )
-main_data %<>% filter( Convert_GA == 0)
-main_data %<>% filter( Age >= 18)
+## consort-type data
+consort_data <- c( "all_rec" = nrow(main_data), 
+   "age" = main_data %>% filter( Age < 18) %>% nrow, 
+   "GA" = main_data %>% filter(Age >= 18) %>% filter(Convert_GA != 0) %>% nrow,
+   "gest" = main_data %>% filter(Age >= 18) %>% filter( Convert_GA == 0) %>%  filter( grepl(Incl_Excl , pattern= "^exc") ) %>% nrow, 
+   "final" = main_data %>% filter(Age >= 18) %>% filter( Convert_GA == 0) %>%  filter( !grepl(Incl_Excl , pattern= "^exc") ) %>% nrow
+   )
+
+main_data %<>% filter( Age >= 18) %>% 
+  filter( Convert_GA == 0) %>% 
+  filter( !grepl(Incl_Excl , pattern= "^exc") )
+  
 main_data %<>% rename(T_Drager_00 =B_Drager_T)
 starting_temperature <- 36.8
 hypothermia_threshold <- 36.0
@@ -312,6 +320,12 @@ real_data  %>%arrange(Case_Number, timepoint) %>%filter(is.finite(temper) ) %>% 
 polygon( c(ci_measured_holder$timepoint, rev(ci_measured_holder$timepoint)) , c( ci_measured_holder$lower.ci , rev(ci_measured_holder$upper.ci) ) , col=mycol2, border=NA)
 
 
+dev.off()
+
+
+png("change_hist.png", res=300, width=4, height=4, units="in")
+
+re_result[[2]] %>% group_by(Case_Number) %>% summarize(delta0=max_loss(predictions) ) %>% pull("delta0") %>% hist(xlab="greatest temperature change", ylab="count", freq=TRUE, main="")
 dev.off()
 
 real_data %>% group_by(Case_Number) %>% summarize( severe_hypo=any(predictions < 35.0 ), delta_1=max_loss(predictions) < -1 ) -> hypothermia_indicators
