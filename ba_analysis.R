@@ -1,4 +1,4 @@
-## docker run --rm -it -v "~/gitdirs/misc_applied_in_dev/sa_temp/:/research" cryanking/temperature_container R
+## docker run --rm -it -v "$(pwd)/gitdirs/misc_applied_in_dev/sa_temp/:/research" cryanking/temperature_container R
 
 library(lme4)
 library(dplyr)
@@ -116,7 +116,7 @@ delta_data$delta3 %>% quantile(probs=c(.025, .05,.1586, .5, .8413 , .95, .975), 
 
 
 overal_output <- bind_rows(drager_ir_out, drager_oral_out, ir_oral_out)
-
+overal_output %<>% mutate( comparison= c("drager_vs_ir", "drager_vs_oral", "ir_vs_oral") )
  overal_output %>% write_csv("agreement_output.csv")
 
 ## pictures
