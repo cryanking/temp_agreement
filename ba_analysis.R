@@ -45,10 +45,14 @@ local_output
 }
 
 
+loa_plot_limit <- 0.5
+
 ## main dataset
 main_data <- read_csv("ob_temp_working_data.csv")  
-main_data %<>% filter(Incl_Excl == "incl")
-
+main_data %<>% filter( Age >= 18) %>% 
+  filter( Convert_GA == 0) %>% 
+  filter( !grepl(Incl_Excl , pattern= "^exc") )
+  
 ## pivot to a "long" form; this is a function so that per-patient bootstrapping is easy, but that isn't actually needed in this analysis
 functional_longify <- function(data, indicies=NULL) {
   if(! is.null(indicies)) {
@@ -130,14 +134,14 @@ abline(h=drager_ir_out[["bias_avg"]] + drager_ir_out[["bias_sd"]]*c(-2,2), col=m
 abline(h=drager_ir_out[["bias_avg"]] + drager_ir_out[["loa_est"]]*c(-1,1) , col="red")
 abline(h=drager_ir_out[["bias_avg"]] + drager_ir_out[["loa_lower"]]*c(-1,1) , col=mycol2)
 abline(h=drager_ir_out[["bias_avg"]] + drager_ir_out[["loa_upper"]]*c(-1,1) , col=mycol2)
-polygon(x=matrix(c(25, -.5, 50,-.5, 50, .5, 25,.5  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
+polygon(x=matrix(c(25, -loa_plot_limit, 50,-loa_plot_limit, 50, loa_plot_limit, 25,loa_plot_limit ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
 
 delta_data %>% filter(ir > 34) %>% filter(drager > 34) %>% mutate(x=ir, y=drager) %>% {plot(x=.$x, y=.$y, xlab="IR", ylab="Drager", main="Drager versus IR", type="p")}
 
 ## repeated measures analysis
 rm_glm <- delta_data %>% filter(drager > 34) %>% filter(ir > 34)%>% lmer(drager~ir+(1|Case_Number), data=.)
 abline(a= rm_glm %>% summary %>% extract2("coefficients") %>% extract(1,1) , b=rm_glm %>% summary %>% extract2("coefficients") %>% extract(2,1) , col="red")
-polygon(x=matrix(c(25,24, 50,49, 50, 51,25,26  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
+polygon(x=matrix(c(25,25-loa_plot_limit, 50,50-loa_plot_limit, 50, 50+loa_plot_limit,25,25+loa_plot_limit  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
 
 # delta_data %>% filter(drager > 34) %>% filter(ir > 34)%>% lm(drager~ir, data=.) %>% abline(col="red")
 abline(0,1)
@@ -153,14 +157,14 @@ abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["bias_sd"]]*c(-2,2), c
 abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["loa_est"]]*c(-1,1) , col="red")
 abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["loa_lower"]]*c(-1,1) , col=mycol2)
 abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["loa_upper"]]*c(-1,1) , col=mycol2)
-polygon(x=matrix(c(25, -.5, 50,-.5, 50, .5, 25,.5  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
+polygon(x=matrix(c(25, -loa_plot_limit, 50,-loa_plot_limit, 50, loa_plot_limit, 25,loa_plot_limit  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
 
 delta_data %>% filter(oral > 34) %>% filter(drager > 34) %>% mutate(x=oral, y=drager) %>% {plot(x=.$x, y=.$y, xlab="Oral", ylab="Drager", main="Drager versus Oral", type="p")}
 
 rm_glm <- delta_data %>% filter(drager > 34) %>% filter(oral > 34)%>% lmer(drager~oral+(1|Case_Number), data=.)
 
 abline(a= rm_glm %>% summary %>% extract2("coefficients") %>% extract(1,1) , b=rm_glm %>% summary %>% extract2("coefficients") %>% extract(2,1)  , col="red")
-polygon(x=matrix(c(25,24, 50,49, 50, 51,25,26  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
+polygon(x=matrix(c(25,25-loa_plot_limit, 50,50-loa_plot_limit, 50, 50+loa_plot_limit,25,25+loa_plot_limit  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
 
 # delta_data %>% filter(oral > 34) %>% filter(drager > 34) %>% lm(drager~oral, data=.) %>%  abline(col="red")
 abline(0,1)
@@ -177,14 +181,14 @@ abline(h=ir_oral_out[["bias_avg"]] + ir_oral_out[["bias_sd"]]*c(-2,2), col=mycol
 abline(h=ir_oral_out[["bias_avg"]] + ir_oral_out[["loa_est"]]*c(-1,1) , col="red")
 abline(h=ir_oral_out[["bias_avg"]] + ir_oral_out[["loa_lower"]]*c(-1,1) , col=mycol2)
 abline(h=ir_oral_out[["bias_avg"]] + ir_oral_out[["loa_upper"]]*c(-1,1) , col=mycol2)
-polygon(x=matrix(c(25, -.5, 50,-.5, 50, .5, 25,.5  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
+polygon(x=matrix(c(25, -loa_plot_limit, 50,-loa_plot_limit, 50, loa_plot_limit, 25,loa_plot_limit  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
 
 delta_data %>% filter(oral > 34) %>% filter(ir > 34) %>% mutate(x=ir, y=oral) %>% {plot(x=.$x, y=.$y, xlab="IR", ylab="Oral", main="Oral versus IR", type="p")}
 
 rm_glm <- delta_data %>% filter(ir > 34) %>% filter(oral > 34)%>% lmer(oral~ir+(1|Case_Number), data=.)
 
 abline(a= rm_glm %>% summary %>% extract2("coefficients") %>% extract(1,1) , b=rm_glm %>% summary %>% extract2("coefficients") %>% extract(2,1) , col="red")
-polygon(x=matrix(c(25,24, 50,49, 50, 51,25,26  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
+polygon(x=matrix(c(25,25-loa_plot_limit, 50,50-loa_plot_limit, 50, 50+loa_plot_limit,25,25+loa_plot_limit  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
 
 # delta_data %>% filter(oral > 34) %>% filter(ir > 34) %>% lm(oral~ir, data=.) %>%  abline(col="red")
 abline(0,1)
@@ -211,14 +215,14 @@ abline(h=ir_oral_out[["bias_avg"]] + ir_oral_out[["bias_sd"]]*c(-2,2), col=mycol
 abline(h=ir_oral_out[["bias_avg"]] + ir_oral_out[["loa_est"]]*c(-1,1) , col="red")
 abline(h=ir_oral_out[["bias_avg"]] + ir_oral_out[["loa_lower"]]*c(-1,1) , col=mycol2)
 abline(h=ir_oral_out[["bias_avg"]] + ir_oral_out[["loa_upper"]]*c(-1,1) , col=mycol2)
-polygon(x=matrix(c(25, -.5, 50,-.5, 50, .5, 25,.5  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
+polygon(x=matrix(c(25, -loa_plot_limit, 50,-loa_plot_limit, 50, loa_plot_limit, 25,loa_plot_limit  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
 
 delta_data  %>% mutate(x=ir, y=oral) %>% {plot(x=.$x, y=.$y, xlab="IR", ylab="Oral", main="Oral versus IR", type="p")}
 
 rm_glm <- delta_data %>% lmer(oral~ir+(1|Case_Number), data=.)
 
 abline(a= rm_glm %>% summary %>% extract2("coefficients") %>% extract(1,1) , b=rm_glm %>% summary %>% extract2("coefficients") %>% extract(2,1) , col="red")
-polygon(x=matrix(c(25,24, 50,49, 50, 51,25,26  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
+polygon(x=matrix(c(25,25-loa_plot_limit, 50,50-loa_plot_limit, 50, 50+loa_plot_limit,25,25+loa_plot_limit  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
 
 # delta_data %>% filter(oral > 34) %>% filter(ir > 34) %>% lm(oral~ir, data=.) %>%  abline(col="red")
 abline(0,1)
@@ -239,14 +243,14 @@ abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["bias_sd"]]*c(-2,2), c
 abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["loa_est"]]*c(-1,1) , col="red")
 abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["loa_lower"]]*c(-1,1) , col=mycol2)
 abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["loa_upper"]]*c(-1,1) , col=mycol2)
-polygon(x=matrix(c(25, -.5, 50,-.5, 50, .5, 25,.5  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
+polygon(x=matrix(c(25, -loa_plot_limit, 50,-loa_plot_limit, 50, loa_plot_limit, 25,loa_plot_limit  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
 
 delta_data  %>% mutate(x=oral, y=drager) %>% {plot(x=.$x, y=.$y, xlab="Oral", ylab="Drager", main="Drager versus Oral", type="p")}
 
 rm_glm <- delta_data %>% lmer(drager~oral+(1|Case_Number), data=.)
 
 abline(a= rm_glm %>% summary %>% extract2("coefficients") %>% extract(1,1) , b=rm_glm %>% summary %>% extract2("coefficients") %>% extract(2,1) , col="red")
-polygon(x=matrix(c(25,24, 50,49, 50, 51,25,26  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
+polygon(x=matrix(c(25,25-loa_plot_limit, 50,50-loa_plot_limit, 50, 50+loa_plot_limit,25,25+loa_plot_limit  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
 
 # delta_data %>% filter(oral > 34) %>% filter(drager > 34) %>% lm(drager~oral, data=.) %>%  abline(col="red")
 abline(0,1)
@@ -264,13 +268,13 @@ abline(h=drager_ir_out[["bias_avg"]] + drager_ir_out[["bias_sd"]]*c(-2,2), col=m
 abline(h=drager_ir_out[["bias_avg"]] + drager_ir_out[["loa_est"]]*c(-1,1) , col="red")
 abline(h=drager_ir_out[["bias_avg"]] + drager_ir_out[["loa_lower"]]*c(-1,1) , col=mycol2)
 abline(h=drager_ir_out[["bias_avg"]] + drager_ir_out[["loa_upper"]]*c(-1,1) , col=mycol2)
-polygon(x=matrix(c(25, -.5, 50,-.5, 50, .5, 25,.5  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
+polygon(x=matrix(c(25, -loa_plot_limit, 50,-loa_plot_limit, 50, loa_plot_limit, 25,loa_plot_limit  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
 delta_data  %>% mutate(x=ir, y=drager) %>% {plot(x=.$x, y=.$y, xlab="IR", ylab="Drager", main="Drager versus IR", type="p")}
 
 ## repeated measures analysis
 rm_glm <- delta_data %>% lmer(drager~ir+(1|Case_Number), data=.)
 abline(a= rm_glm %>% summary %>% extract2("coefficients") %>% extract(1,1) , b=rm_glm %>% summary %>% extract2("coefficients") %>% extract(2,1) , col="red")
-polygon(x=matrix(c(25,24, 50,49, 50, 51,25,26  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
+polygon(x=matrix(c(25,25-loa_plot_limit, 50,50-loa_plot_limit, 50, 50+loa_plot_limit,25,25+loa_plot_limit  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
 
 # delta_data %>% filter(drager > 34) %>% filter(ir > 34)%>% lm(drager~ir, data=.) %>% abline(col="red")
 abline(0,1)
