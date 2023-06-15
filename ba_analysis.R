@@ -112,17 +112,55 @@ main_data %>% functional_longify  %>% pivot_wider(id_cols = one_of("Case_Number"
   ir_oral_out %>% round(2)
 
 
-delta_data$delta3 %>% quantile(probs=c(.025, .05,.1586, .5, .8413 , .95, .975), na.rm=T) %>% round(2)
+
+##########
+## Exclude t0
+##########
+##drager vs ir
+
+## with only 4 timepoints, just make time cat
+## random intercept -> per person variation in calibration
+  drager_ir_fit <- lmer( delta1~factor(timepoint) + (1|Case_Number) , data=delta_data %>% filter(timepoint>0) )
+  drager_ir_out0 <- loa_from_fit(drager_ir_fit)
+##drager vs oral
+  drager_oral_fit <- lmer( delta2~factor(timepoint) + (1|Case_Number) , data=delta_data %>% filter(timepoint>0) )
+  drager_oral_out0 <- loa_from_fit(drager_oral_fit)
+##oral vs ir
+  ir_oral_fit <- lmer( delta3~factor(timepoint) + (1|Case_Number) , data=delta_data %>% filter(timepoint>0) )
+  ir_oral_out0 <- loa_from_fit(ir_oral_fit)
 
 
 overal_output <- bind_rows(drager_ir_out, drager_oral_out, ir_oral_out)
 overal_output %<>% mutate( comparison= c("drager_vs_ir", "drager_vs_oral", "ir_vs_oral") )
- overal_output %>% write_csv("agreement_output.csv")
+overal_output0 <- bind_rows(drager_ir_out0, drager_oral_out0, ir_oral_out0)
+overal_output0 %<>% mutate( comparison= c("drager_vs_ir_gt0", "drager_vs_oral_gt0", "ir_vs_oral_gt0") )
+overal_output <-bind_rows(overal_output,overal_output0)
+
+overal_output %>% write_csv("agreement_output.csv")
 
 ## pictures
 mycol <- rgb(0, 0, 0 , max = 255, alpha = 100, names = "black50")
 mycol2 <- rgb(255, 0, 0 , max = 255, alpha = 100, names = "red50")
 mycol3 <- rgb(0, 0, 255 , max = 255, alpha = 50, names = "blue25")
+
+library(ggplot2)
+
+myplot <- ggplot(delta_data %>% filter(timepoint < 40) %>% mutate(timepoint= paste0("t = ", timepoint, " min")), aes(x = drager)) +
+  geom_point(aes(y = oral), color=mycol3) +
+  geom_smooth(aes(y = oral), method = "lm", se = FALSE, color = "blue") +
+  geom_point(aes(y = ir), color=mycol2) +
+  geom_smooth(aes(y = ir), method = "lm", se = FALSE, color = "red") +
+  facet_wrap( vars(timepoint)) + theme_minimal() +
+  theme(strip.background = element_blank(),
+        strip.text = element_text(face = "bold")) +
+  labs(x = "Drager Temperature", y = "Usual Temperature")
+ggsave("scatterplot_figure.pdf", myplot)
+ggsave("scatterplot_figure_lim.pdf", myplot + coord_cartesian(ylim = c(34,39), xlim = c(34,39)))
+
+
+
+
+
 
 
 jpeg("drager_ir_ba.jpg", res=300, width=12, height=6, units="in")
@@ -195,11 +233,60 @@ abline(0,1)
 
 dev.off()
 
+library(boot)
+correlation <- function(data,indices) {
+cor(data[indices, 1], data[indices, 2], use="pairwise")
+}
+
+boot_obj <- boot(delta_data%>% select(drager, oral) %>% mutate_all( function(x){if_else(x<34, NA_real_, x) }), correlation, R = 1000)
+ci <- boot.ci( boot_obj, conf = 0.95, type="perc")
+df <- data.frame(variable1 = "drager", variable2 ="oral", correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5])
+
+boot_obj <- boot(delta_data%>% select(drager, ir) %>% mutate_all( function(x){if_else(x<34, NA_real_, x) }), correlation, R = 1000)
+ci <- boot.ci( boot_obj, conf = 0.95, type="perc")
+df <- rbind(df , data.frame(variable1 = "drager", variable2 ="ir", correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5]) )
 
 
+boot_obj <- boot(delta_data%>% select(oral, ir) %>% mutate_all( function(x){if_else(x<34, NA_real_, x) }), correlation, R = 1000)
+ci <- boot.ci( boot_obj, conf = 0.95, type="perc")
+df <- rbind(df , data.frame(variable1 = "oral", variable2 ="ir", correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5]) )
 
-delta_data %>% select(drager, oral, ir) %>% mutate_all( function(x){if_else(x<34, NA_real_, x) } ) %>% as.matrix %>% cor(use="pairwise") %>% round(2) %>% write.csv("pairwise_correlations.csv")
+boot_obj <- boot(delta_data %>% filter(timepoint>0) %>% select(drager, oral) %>% mutate_all( function(x){if_else(x<34, NA_real_, x) }), correlation, R = 1000)
+ci <- boot.ci( boot_obj, conf = 0.95, type="perc")
+df <-rbind(df , data.frame(variable1 = "drager", variable2 ="oral", correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5]) )
 
+boot_obj <- boot(delta_data %>% filter(timepoint>0) %>% select(drager, ir) %>% mutate_all( function(x){if_else(x<34, NA_real_, x) }), correlation, R = 1000)
+ci <- boot.ci( boot_obj, conf = 0.95, type="perc")
+df <- rbind(df , data.frame(variable1 = "drager", variable2 ="ir", correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5]) )
+
+
+boot_obj <- boot(delta_data %>% filter(timepoint>0) %>% select(oral, ir) %>% mutate_all( function(x){if_else(x<34, NA_real_, x) }), correlation, R = 1000)
+ci <- boot.ci( boot_obj, conf = 0.95, type="perc")
+df <- rbind(df , data.frame(variable1 = "oral", variable2 ="ir", correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5]) )
+
+df$timepoint <- rep(c("all", "excluding 0"), each=3 ) 
+
+for(t0 in c(0, 10, 20,30) ) {
+  boot_obj <- boot(delta_data %>% filter(timepoint==t0) %>% select(drager, oral) %>% mutate_all( function(x){if_else(x<34, NA_real_, x) }), correlation, R = 1000)
+  ci <- boot.ci( boot_obj, conf = 0.95, type="perc")
+  df <-rbind(df , data.frame(variable1 = "drager", variable2 ="oral", correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5], timepoint=paste(t0) ) )
+
+  boot_obj <- boot(delta_data %>% filter(timepoint==t0)  %>% select(drager, ir) %>% mutate_all( function(x){if_else(x<34, NA_real_, x) }), correlation, R = 1000)
+  ci <- boot.ci( boot_obj, conf = 0.95, type="perc")
+  df <- rbind(df , data.frame(variable1 = "drager", variable2 ="ir", correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5], timepoint=paste(t0) ) )
+
+
+  boot_obj <- boot(delta_data %>% filter(timepoint==t0)  %>% select(oral, ir) %>% mutate_all( function(x){if_else(x<34, NA_real_, x) }), correlation, R = 1000)
+  ci <- boot.ci( boot_obj, conf = 0.95, type="perc")
+  df <- rbind(df , data.frame(variable1 = "oral", variable2 ="ir", correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5], timepoint=paste(t0) ) )
+
+}
+
+df$correlation %<>% round(2)
+df$lower %<>% round(2)
+df$upper %<>% round(2)
+
+df %>% write_csv("pairwise_correlations.csv")
 # delta_data %>% select(drager, oral, ir) %>% mutate_all( function(x){if_else(x<34, NA_real_, x) } ) %>% as.matrix %>% cov(use="pairwise") %>% round(2)
 
 
