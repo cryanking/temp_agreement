@@ -1,6 +1,6 @@
 
  
-docker run -v $(pwd):/research cryanking/temperature_container  R --slave -e 'options(width=2000); writeLines(toLatex(sessionInfo()),"rinfo.tex") ; write.csv(installed.packages()[, c("Package", "Version", "Built", "LibPath")], "/research/r_packages.txt")'
+docker run -v $(pwd):/research cryanking/temperature_container  R --slave -e 'options(width=2000); writeLines(toLatex(sessionInfo()),"/research/rinfo.tex") ; write.csv(installed.packages()[, c("Package", "Version", "Built", "LibPath")], "/research/r_packages.txt")'
 
 echo $(date +'%m/%d/%Y %r') > build.txt
 echo -n "build commit: " >> build.txt
