@@ -1,5 +1,3 @@
-## docker run --rm -it -v "$(pwd)/gitdirs/misc_applied_in_dev/sa_temp/:/research" cryanking/temperature_container R
-
 library(lme4)
 library(dplyr)
 library(splines)
@@ -7,53 +5,65 @@ library(pbkrtest)
 library(readr)
 library(tidyr)
 library(magrittr)
+library(ggplot2)
+
 setwd("/research")
 
+## re-use some bootstrap variables across experiments to reduce variation
 set.seed(1002)
 normal_sample <- exp(rnorm(2000))
 
+## a helper function to calculate the level of agreement as a function of the standard deviation of the log variance
+## there is no analytic formula that works in this case, so a quick numeric search for the necessary multiplier for the standard deviation of differences
 find_loa_factor <- function(sd=1, width=0.95) {
-if(! exists("normal_sample")) { normal_sample<- exp(rnorm(2000)) }
-uniroot(f= function(x){ mean(pchisq(x*x *normal_sample^sd , df=1)) - 0.95}, lower= 0.01, upper=20 )$root
+  if(! exists("normal_sample")) { normal_sample<- exp(rnorm(2000)) }
+  uniroot(f= function(x){ mean(pchisq(x*x *normal_sample^sd , df=1)) - 0.95}, lower= 0.01, upper=20 )$root
 }
+
+
+## a function to calculate level of agreement 
+## input: an lmer object having fit the differences between two sensors at each time point
+##        - subjects are assumed to be indexed by "Case_Number" which is a variance component
+## output: a named vector with summaries of the agreement (bias, SD of differences, total LOA, 95% bounds on the LOA)
 
 loa_from_fit <- function(local_fit) {
 
-## sd est
+  ## extract sd estimates
   total_sd <- (local_fit %>% summary %>% extract2("varcor") %>% extract2("Case_Number") %>% as.numeric + local_fit %>% summary %>% extract2("sigma") %>% raise_to_power(2) ) %>% sqrt
 
+  ## bootstrap estimates of the total log variance
+  local_boot <- bootMer(local_fit, FUN=function(local_fit){ log(local_fit%>% summary %>% extract2("varcor") %>% extract2("Case_Number") %>% as.numeric + local_fit %>% summary %>% extract2("sigma") %>% raise_to_power(2) ) } , nsim=100L)%>% extract2("t") %>% as.numeric 
+
+  ## the standard deviation of the log variance and the LOA calculated from that
+  boot_sd <- local_boot %>% sd
+  local_loa_mult <- boot_sd %>% find_loa_factor(sd=.)
   
-local_boot <- bootMer(local_fit, FUN=function(local_fit){ log(local_fit%>% summary %>% extract2("varcor") %>% extract2("Case_Number") %>% as.numeric + local_fit %>% summary %>% extract2("sigma") %>% raise_to_power(2) ) } , nsim=100L)%>% extract2("t") %>% as.numeric 
+  ## 95% percentile CIs on the standard deviation of differences
+  boot_sd_limits <- local_boot %>% quantile(c(0.025, .975)) %>% exp %>% sqrt %>% set_names(c("loa_lower", "loa_upper"))
 
-boot_sd <- local_boot %>% sd
-boot_sd_limits <- local_boot %>% quantile(c(0.025, .975)) %>% exp %>% sqrt
+  ## extract var(mean) and mean(mean) of fixed effects to get the total predidictive variance
+  prediction_variance <- matrix(colMeans(model.matrix(local_fit, type="fixed")), nrow=1) %*% tcrossprod(pbkrtest::vcovAdj(local_fit) , matrix( colMeans( model.matrix(local_fit, type="fixed")), nrow=1 ) ) %>% as.numeric
 
-local_loa_mult <- boot_sd %>% find_loa_factor(sd=.)
+  ## compute some other summaries: 
+  local_output <- c(  
+    bias_avg= mean(fitted(local_fit)),  ## average bias between sensors
+    bias_sd = sqrt(prediction_variance ) , ## standard deviation of expected differences
+    loa_est = total_sd*local_loa_mult ,  ## total LOA
+    boot_sd_limits*local_loa_mult  ) ## bounds on the LOA
 
-
-## extract var(mean) and mean(mean) of fe
-prediction_variance <- matrix(colMeans(model.matrix(local_fit, type="fixed")), nrow=1) %*% tcrossprod(pbkrtest::vcovAdj(local_fit) , matrix( colMeans( model.matrix(local_fit, type="fixed")), nrow=1 ) ) %>% as.numeric
-
-
-## bias_avg, bias_sd
-local_output <- c(  mean(fitted(local_fit)), sqrt(prediction_variance ) , total_sd*local_loa_mult ,  boot_sd_limits*local_loa_mult  )
-
-
-names(local_output ) <- c("bias_avg", "bias_sd", "loa_est", "loa_lower", "loa_upper")
-
-local_output  
+  return(local_output)
 }
 
 
-loa_plot_limit <- 0.5
-
-## main dataset
+######
+## load dataset, apply exclusions
+######
 main_data <- read_csv("ob_temp_working_data.csv")  
 main_data %<>% filter( Age >= 18) %>% 
   filter( Convert_GA == 0) %>% 
   filter( !grepl(Incl_Excl , pattern= "^exc") )
   
-## pivot to a "long" form; this is a function so that per-patient bootstrapping is easy, but that isn't actually needed in this analysis
+## pivot to a "long" form; this is a function so that per-patient bootstrapping is easy later
 functional_longify <- function(data, indicies=NULL) {
   if(! is.null(indicies)) {
     data <- data[indicies,]
@@ -76,58 +86,40 @@ functional_longify <- function(data, indicies=NULL) {
   return(data)
 }
 
-## compute pairwise differences in a slightly wider format
-## note that using deltas means that some potential smoothing information is lost on the more frequent signal
-
+## pivot long then wider and compute the 3 sets of differences between sensors
 main_data %>% functional_longify  %>% pivot_wider(id_cols = one_of("Case_Number", "timepoint" ), names_from="source", values_from="temper"  ) %>% mutate(delta1=drager-ir, delta2=drager-oral, delta3=oral-ir) -> delta_data
 
 ##########
-##drager vs ir
-
-## with only 4 timepoints, just make time cat
+## linear mixed effects models for each set of differences
+## with only 4 timepoints, just make time categorical with no parametric personal trends
 ## random intercept -> per person variation in calibration
-  drager_ir_fit <- lmer( delta1~factor(timepoint) + (1|Case_Number) , data=delta_data)
-
-  drager_ir_out <- loa_from_fit(drager_ir_fit)
-  drager_ir_out %>% round(2)
-
-  delta_data$delta1 %>% quantile(probs=c(.025, .05,.1586, .5, .8413 , .95, .975), na.rm=T) %>% round(2)
-
-
 ##########
+
+##drager vs ir
+  drager_ir_fit <- lmer( delta1~factor(timepoint) + (1|Case_Number) , data=delta_data)
+  drager_ir_out <- loa_from_fit(drager_ir_fit)
+## debugging output
+#   drager_ir_out %>% round(2)
+#   delta_data$delta1 %>% quantile(probs=c(.025, .05,.1586, .5, .8413 , .95, .975), na.rm=T) %>% round(2)
+
 ##drager vs oral
   drager_oral_fit <- lmer( delta2~factor(timepoint) + (1|Case_Number) , data=delta_data)
-  
   drager_oral_out <- loa_from_fit(drager_oral_fit)
-  drager_oral_out %>% round(2)
+#   drager_oral_out %>% round(2)
+#   delta_data$delta2 %>% quantile(probs=c(.025, .05,.1586, .5, .8413 , .95, .975), na.rm=T) %>% round(2)
 
-
-  delta_data$delta2 %>% quantile(probs=c(.025, .05,.1586, .5, .8413 , .95, .975), na.rm=T) %>% round(2)
-
-
-##########
 ##oral vs ir
   ir_oral_fit <- lmer( delta3~factor(timepoint) + (1|Case_Number) , data=delta_data)
   ir_oral_out <- loa_from_fit(ir_oral_fit)
-  ir_oral_out %>% round(2)
-
+#   ir_oral_out %>% round(2)
 
 
 ##########
-## Exclude t0
+## Refit models excluding t0 because there were concerns about drager not having equilibrated
 ##########
-##drager vs ir
-
-## with only 4 timepoints, just make time cat
-## random intercept -> per person variation in calibration
-  drager_ir_fit <- lmer( delta1~factor(timepoint) + (1|Case_Number) , data=delta_data %>% filter(timepoint>0) )
-  drager_ir_out0 <- loa_from_fit(drager_ir_fit)
-##drager vs oral
-  drager_oral_fit <- lmer( delta2~factor(timepoint) + (1|Case_Number) , data=delta_data %>% filter(timepoint>0) )
-  drager_oral_out0 <- loa_from_fit(drager_oral_fit)
-##oral vs ir
-  ir_oral_fit <- lmer( delta3~factor(timepoint) + (1|Case_Number) , data=delta_data %>% filter(timepoint>0) )
-  ir_oral_out0 <- loa_from_fit(ir_oral_fit)
+  drager_ir_out0 <- lmer( delta1~factor(timepoint) + (1|Case_Number) , data=delta_data %>% filter(timepoint>0) ) %>% loa_from_fit
+  drager_oral_out0 <- lmer( delta2~factor(timepoint) + (1|Case_Number) , data=delta_data %>% filter(timepoint>0) ) %>% loa_from_fit
+  ir_oral_out0 <- lmer( delta3~factor(timepoint) + (1|Case_Number) , data=delta_data %>% filter(timepoint>0) ) %>% loa_from_fit
 
 
 overal_output <- bind_rows(drager_ir_out, drager_oral_out, ir_oral_out)
@@ -135,16 +127,18 @@ overal_output %<>% mutate( comparison= c("drager_vs_ir", "drager_vs_oral", "ir_v
 overal_output0 <- bind_rows(drager_ir_out0, drager_oral_out0, ir_oral_out0)
 overal_output0 %<>% mutate( comparison= c("drager_vs_ir_gt0", "drager_vs_oral_gt0", "ir_vs_oral_gt0") )
 overal_output <-bind_rows(overal_output,overal_output0)
-
 overal_output %>% write_csv("agreement_output.csv")
 
+##########
 ## pictures
+##########
+loa_plot_limit <- 0.5
 mycol <- rgb(0, 0, 0 , max = 255, alpha = 100, names = "black50")
 mycol2 <- rgb(255, 0, 0 , max = 255, alpha = 100, names = "red50")
 mycol3 <- rgb(0, 0, 255 , max = 255, alpha = 50, names = "blue25")
 
-library(ggplot2)
 
+## a figure of raw data
 myplot <- ggplot(delta_data %>% filter(timepoint < 40) %>% mutate(timepoint= paste0("t = ", timepoint, " min")), aes(x = drager)) +
   geom_point(aes(y = oral), color=mycol3) +
   geom_smooth(aes(y = oral), method = "lm", se = FALSE, color = "blue") +
@@ -155,139 +149,72 @@ myplot <- ggplot(delta_data %>% filter(timepoint < 40) %>% mutate(timepoint= pas
         strip.text = element_text(face = "bold")) +
   labs(x = "Drager Temperature", y = "Usual Temperature")
 ggsave("scatterplot_figure.pdf", myplot)
+
+## to improve visualization, truncate out some outliers
 ggsave("scatterplot_figure_lim.pdf", myplot + coord_cartesian(ylim = c(34,39), xlim = c(34,39)))
 
 
-
-
-
-
-
+## bland-altman plot of drager and IR
+## filter out impossibly low temps (< 34) from the figure
 jpeg("drager_ir_ba.jpg", res=300, width=12, height=6, units="in")
 par(mfrow=c(1,2))
 delta_data %>% filter(ir > 34) %>% filter(drager > 34) %>% mutate(x=(drager+ir)/2, y=delta1 ) %>% {plot(x=.$x, y=.$y, xlab="average", ylab="difference", main="Drager versus IR", type="p", xlim=c(34,39), ylim=c(-4,4))}
+## horizontal line for the average difference
 abline(h=drager_ir_out[["bias_avg"]] , col="black")
-abline(h=drager_ir_out[["bias_avg"]] + drager_ir_out[["bias_sd"]]*c(-2,2), col=mycol)
-
+## horizontal line for simplistic 95% CI on the average difference
+abline(h=drager_ir_out[["bias_avg"]] + drager_ir_out[["bias_sd"]]*c(-1,1)*1.96, col=mycol)
+## horizontal line for the LOA and it's CI
 abline(h=drager_ir_out[["bias_avg"]] + drager_ir_out[["loa_est"]]*c(-1,1) , col="red")
 abline(h=drager_ir_out[["bias_avg"]] + drager_ir_out[["loa_lower"]]*c(-1,1) , col=mycol2)
 abline(h=drager_ir_out[["bias_avg"]] + drager_ir_out[["loa_upper"]]*c(-1,1) , col=mycol2)
+## bounds for clinically acceptable differences
 polygon(x=matrix(c(25, -loa_plot_limit, 50,-loa_plot_limit, 50, loa_plot_limit, 25,loa_plot_limit ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
 
+## same figure but scatterplots instead of BA plots
 delta_data %>% filter(ir > 34) %>% filter(drager > 34) %>% mutate(x=ir, y=drager) %>% {plot(x=.$x, y=.$y, xlab="IR", ylab="Drager", main="Drager versus IR", type="p")}
-
-## repeated measures analysis
+## LMER repeated measures analysis for the trendline
 rm_glm <- delta_data %>% filter(drager > 34) %>% filter(ir > 34)%>% lmer(drager~ir+(1|Case_Number), data=.)
 abline(a= rm_glm %>% summary %>% extract2("coefficients") %>% extract(1,1) , b=rm_glm %>% summary %>% extract2("coefficients") %>% extract(2,1) , col="red")
 polygon(x=matrix(c(25,25-loa_plot_limit, 50,50-loa_plot_limit, 50, 50+loa_plot_limit,25,25+loa_plot_limit  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
-
-# delta_data %>% filter(drager > 34) %>% filter(ir > 34)%>% lm(drager~ir, data=.) %>% abline(col="red")
+## true agreement line
 abline(0,1)
 dev.off()
 
-
- jpeg("drager_oral_ba.jpg", res=300, width=12, height=6, units="in")
+## same figures for drager and oral
+jpeg("drager_oral_ba.jpg", res=300, width=12, height=6, units="in")
 par(mfrow=c(1,2))
 delta_data  %>% filter(oral > 34) %>% filter(drager > 34) %>% mutate(x=(drager+oral)/2, y=delta2 ) %>% {plot(x=.$x, y=.$y, xlab="average", ylab="difference", main="Drager versus oral", type="p", xlim=c(34,39), ylim=c(-4,4))}
 abline(h=drager_oral_out[["bias_avg"]] , col="black")
 abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["bias_sd"]]*c(-2,2), col=mycol)
-
 abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["loa_est"]]*c(-1,1) , col="red")
 abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["loa_lower"]]*c(-1,1) , col=mycol2)
 abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["loa_upper"]]*c(-1,1) , col=mycol2)
 polygon(x=matrix(c(25, -loa_plot_limit, 50,-loa_plot_limit, 50, loa_plot_limit, 25,loa_plot_limit  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
 
 delta_data %>% filter(oral > 34) %>% filter(drager > 34) %>% mutate(x=oral, y=drager) %>% {plot(x=.$x, y=.$y, xlab="Oral", ylab="Drager", main="Drager versus Oral", type="p")}
-
 rm_glm <- delta_data %>% filter(drager > 34) %>% filter(oral > 34)%>% lmer(drager~oral+(1|Case_Number), data=.)
-
 abline(a= rm_glm %>% summary %>% extract2("coefficients") %>% extract(1,1) , b=rm_glm %>% summary %>% extract2("coefficients") %>% extract(2,1)  , col="red")
 polygon(x=matrix(c(25,25-loa_plot_limit, 50,50-loa_plot_limit, 50, 50+loa_plot_limit,25,25+loa_plot_limit  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
-
-# delta_data %>% filter(oral > 34) %>% filter(drager > 34) %>% lm(drager~oral, data=.) %>%  abline(col="red")
 abline(0,1)
-
 dev.off()
 
-
+## same figures for IR and oral
 jpeg("oral_ir_ba.jpg", res=300, width=12, height=6, units="in")
 par(mfrow=c(1,2))
 delta_data %>% filter(oral > 34) %>% filter(ir > 34) %>% mutate(x=(oral+ir)/2, y=delta3 ) %>% {plot(x=.$x, y=.$y, xlab="average", ylab="difference", main="Oral versus IR", type="p", xlim=c(34,39), ylim=c(-4,4))}
 abline(h=ir_oral_out[["bias_avg"]] , col="black")
 abline(h=ir_oral_out[["bias_avg"]] + ir_oral_out[["bias_sd"]]*c(-2,2), col=mycol)
-
 abline(h=ir_oral_out[["bias_avg"]] + ir_oral_out[["loa_est"]]*c(-1,1) , col="red")
 abline(h=ir_oral_out[["bias_avg"]] + ir_oral_out[["loa_lower"]]*c(-1,1) , col=mycol2)
 abline(h=ir_oral_out[["bias_avg"]] + ir_oral_out[["loa_upper"]]*c(-1,1) , col=mycol2)
 polygon(x=matrix(c(25, -loa_plot_limit, 50,-loa_plot_limit, 50, loa_plot_limit, 25,loa_plot_limit  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
 
 delta_data %>% filter(oral > 34) %>% filter(ir > 34) %>% mutate(x=ir, y=oral) %>% {plot(x=.$x, y=.$y, xlab="IR", ylab="Oral", main="Oral versus IR", type="p")}
-
 rm_glm <- delta_data %>% filter(ir > 34) %>% filter(oral > 34)%>% lmer(oral~ir+(1|Case_Number), data=.)
-
 abline(a= rm_glm %>% summary %>% extract2("coefficients") %>% extract(1,1) , b=rm_glm %>% summary %>% extract2("coefficients") %>% extract(2,1) , col="red")
 polygon(x=matrix(c(25,25-loa_plot_limit, 50,50-loa_plot_limit, 50, 50+loa_plot_limit,25,25+loa_plot_limit  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
-
-# delta_data %>% filter(oral > 34) %>% filter(ir > 34) %>% lm(oral~ir, data=.) %>%  abline(col="red")
 abline(0,1)
-
 dev.off()
-
-library(boot)
-correlation <- function(data,indices) {
-cor(data[indices, 1], data[indices, 2], use="pairwise")
-}
-
-boot_obj <- boot(delta_data%>% select(drager, oral) %>% mutate_all( function(x){if_else(x<34, NA_real_, x) }), correlation, R = 1000)
-ci <- boot.ci( boot_obj, conf = 0.95, type="perc")
-df <- data.frame(variable1 = "drager", variable2 ="oral", correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5])
-
-boot_obj <- boot(delta_data%>% select(drager, ir) %>% mutate_all( function(x){if_else(x<34, NA_real_, x) }), correlation, R = 1000)
-ci <- boot.ci( boot_obj, conf = 0.95, type="perc")
-df <- rbind(df , data.frame(variable1 = "drager", variable2 ="ir", correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5]) )
-
-
-boot_obj <- boot(delta_data%>% select(oral, ir) %>% mutate_all( function(x){if_else(x<34, NA_real_, x) }), correlation, R = 1000)
-ci <- boot.ci( boot_obj, conf = 0.95, type="perc")
-df <- rbind(df , data.frame(variable1 = "oral", variable2 ="ir", correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5]) )
-
-boot_obj <- boot(delta_data %>% filter(timepoint>0) %>% select(drager, oral) %>% mutate_all( function(x){if_else(x<34, NA_real_, x) }), correlation, R = 1000)
-ci <- boot.ci( boot_obj, conf = 0.95, type="perc")
-df <-rbind(df , data.frame(variable1 = "drager", variable2 ="oral", correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5]) )
-
-boot_obj <- boot(delta_data %>% filter(timepoint>0) %>% select(drager, ir) %>% mutate_all( function(x){if_else(x<34, NA_real_, x) }), correlation, R = 1000)
-ci <- boot.ci( boot_obj, conf = 0.95, type="perc")
-df <- rbind(df , data.frame(variable1 = "drager", variable2 ="ir", correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5]) )
-
-
-boot_obj <- boot(delta_data %>% filter(timepoint>0) %>% select(oral, ir) %>% mutate_all( function(x){if_else(x<34, NA_real_, x) }), correlation, R = 1000)
-ci <- boot.ci( boot_obj, conf = 0.95, type="perc")
-df <- rbind(df , data.frame(variable1 = "oral", variable2 ="ir", correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5]) )
-
-df$timepoint <- rep(c("all", "excluding 0"), each=3 ) 
-
-for(t0 in c(0, 10, 20,30) ) {
-  boot_obj <- boot(delta_data %>% filter(timepoint==t0) %>% select(drager, oral) %>% mutate_all( function(x){if_else(x<34, NA_real_, x) }), correlation, R = 1000)
-  ci <- boot.ci( boot_obj, conf = 0.95, type="perc")
-  df <-rbind(df , data.frame(variable1 = "drager", variable2 ="oral", correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5], timepoint=paste(t0) ) )
-
-  boot_obj <- boot(delta_data %>% filter(timepoint==t0)  %>% select(drager, ir) %>% mutate_all( function(x){if_else(x<34, NA_real_, x) }), correlation, R = 1000)
-  ci <- boot.ci( boot_obj, conf = 0.95, type="perc")
-  df <- rbind(df , data.frame(variable1 = "drager", variable2 ="ir", correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5], timepoint=paste(t0) ) )
-
-
-  boot_obj <- boot(delta_data %>% filter(timepoint==t0)  %>% select(oral, ir) %>% mutate_all( function(x){if_else(x<34, NA_real_, x) }), correlation, R = 1000)
-  ci <- boot.ci( boot_obj, conf = 0.95, type="perc")
-  df <- rbind(df , data.frame(variable1 = "oral", variable2 ="ir", correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5], timepoint=paste(t0) ) )
-
-}
-
-df$correlation %<>% round(2)
-df$lower %<>% round(2)
-df$upper %<>% round(2)
-
-df %>% write_csv("pairwise_correlations.csv")
-# delta_data %>% select(drager, oral, ir) %>% mutate_all( function(x){if_else(x<34, NA_real_, x) } ) %>% as.matrix %>% cov(use="pairwise") %>% round(2)
 
 
 ###############
@@ -298,50 +225,33 @@ par(mfrow=c(1,2))
 delta_data  %>% mutate(x=(oral+ir)/2, y=delta3 ) %>% {plot(x=.$x, y=.$y, xlab="average", ylab="difference", main="Oral versus IR", type="p" )}
 abline(h=ir_oral_out[["bias_avg"]] , col="black")
 abline(h=ir_oral_out[["bias_avg"]] + ir_oral_out[["bias_sd"]]*c(-2,2), col=mycol)
-
 abline(h=ir_oral_out[["bias_avg"]] + ir_oral_out[["loa_est"]]*c(-1,1) , col="red")
 abline(h=ir_oral_out[["bias_avg"]] + ir_oral_out[["loa_lower"]]*c(-1,1) , col=mycol2)
 abline(h=ir_oral_out[["bias_avg"]] + ir_oral_out[["loa_upper"]]*c(-1,1) , col=mycol2)
 polygon(x=matrix(c(25, -loa_plot_limit, 50,-loa_plot_limit, 50, loa_plot_limit, 25,loa_plot_limit  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
 
 delta_data  %>% mutate(x=ir, y=oral) %>% {plot(x=.$x, y=.$y, xlab="IR", ylab="Oral", main="Oral versus IR", type="p")}
-
 rm_glm <- delta_data %>% lmer(oral~ir+(1|Case_Number), data=.)
-
 abline(a= rm_glm %>% summary %>% extract2("coefficients") %>% extract(1,1) , b=rm_glm %>% summary %>% extract2("coefficients") %>% extract(2,1) , col="red")
 polygon(x=matrix(c(25,25-loa_plot_limit, 50,50-loa_plot_limit, 50, 50+loa_plot_limit,25,25+loa_plot_limit  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
-
-# delta_data %>% filter(oral > 34) %>% filter(ir > 34) %>% lm(oral~ir, data=.) %>%  abline(col="red")
 abline(0,1)
-
 dev.off()
 
-
-
-
-
-
- jpeg("drager_oral_ba_no_filter.jpg", res=300, width=12, height=6, units="in")
+jpeg("drager_oral_ba_no_filter.jpg", res=300, width=12, height=6, units="in")
 par(mfrow=c(1,2))
 delta_data  %>% mutate(x=(drager+oral)/2, y=delta2 ) %>% {plot(x=.$x, y=.$y, xlab="average", ylab="difference", main="Drager versus oral", type="p")}
 abline(h=drager_oral_out[["bias_avg"]] , col="black")
 abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["bias_sd"]]*c(-2,2), col=mycol)
-
 abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["loa_est"]]*c(-1,1) , col="red")
 abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["loa_lower"]]*c(-1,1) , col=mycol2)
 abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["loa_upper"]]*c(-1,1) , col=mycol2)
 polygon(x=matrix(c(25, -loa_plot_limit, 50,-loa_plot_limit, 50, loa_plot_limit, 25,loa_plot_limit  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
 
 delta_data  %>% mutate(x=oral, y=drager) %>% {plot(x=.$x, y=.$y, xlab="Oral", ylab="Drager", main="Drager versus Oral", type="p")}
-
 rm_glm <- delta_data %>% lmer(drager~oral+(1|Case_Number), data=.)
-
 abline(a= rm_glm %>% summary %>% extract2("coefficients") %>% extract(1,1) , b=rm_glm %>% summary %>% extract2("coefficients") %>% extract(2,1) , col="red")
 polygon(x=matrix(c(25,25-loa_plot_limit, 50,50-loa_plot_limit, 50, 50+loa_plot_limit,25,25+loa_plot_limit  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
-
-# delta_data %>% filter(oral > 34) %>% filter(drager > 34) %>% lm(drager~oral, data=.) %>%  abline(col="red")
 abline(0,1)
-
 dev.off()
 
 
@@ -351,21 +261,107 @@ par(mfrow=c(1,2))
 delta_data  %>% mutate(x=(drager+ir)/2, y=delta1 ) %>% {plot(x=.$x, y=.$y, xlab="average", ylab="difference", main="Drager versus IR", type="p")}
 abline(h=drager_ir_out[["bias_avg"]] , col="black")
 abline(h=drager_ir_out[["bias_avg"]] + drager_ir_out[["bias_sd"]]*c(-2,2), col=mycol)
-
 abline(h=drager_ir_out[["bias_avg"]] + drager_ir_out[["loa_est"]]*c(-1,1) , col="red")
 abline(h=drager_ir_out[["bias_avg"]] + drager_ir_out[["loa_lower"]]*c(-1,1) , col=mycol2)
 abline(h=drager_ir_out[["bias_avg"]] + drager_ir_out[["loa_upper"]]*c(-1,1) , col=mycol2)
 polygon(x=matrix(c(25, -loa_plot_limit, 50,-loa_plot_limit, 50, loa_plot_limit, 25,loa_plot_limit  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
 delta_data  %>% mutate(x=ir, y=drager) %>% {plot(x=.$x, y=.$y, xlab="IR", ylab="Drager", main="Drager versus IR", type="p")}
 
-## repeated measures analysis
 rm_glm <- delta_data %>% lmer(drager~ir+(1|Case_Number), data=.)
 abline(a= rm_glm %>% summary %>% extract2("coefficients") %>% extract(1,1) , b=rm_glm %>% summary %>% extract2("coefficients") %>% extract(2,1) , col="red")
 polygon(x=matrix(c(25,25-loa_plot_limit, 50,50-loa_plot_limit, 50, 50+loa_plot_limit,25,25+loa_plot_limit  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
-
-# delta_data %>% filter(drager > 34) %>% filter(ir > 34)%>% lm(drager~ir, data=.) %>% abline(col="red")
 abline(0,1)
 dev.off()
+
+
+
+## Additional summary outputs - correlation with bootstrap based CI
+library(boot)
+## a wrapper for patient-level bootstrap followed by pivoting and correlation
+## this is less computationally efficient than it could be, but not worth optimizing
+t_correlation <- function(data,indices, mvars) {
+  functional_longify(data, indices) %>%
+  pivot_wider(id_cols = one_of("Case_Number", "timepoint" ), names_from="source", values_from="temper"  ) %>% 
+  select(one_of(mvars)) %>% 
+  mutate_all( function(x){if_else(x<34, NA_real_, x) }) -> data
+  cor(data[, 1], data[, 2], use="pairwise")
+}
+
+current_vars <- c("drager", "oral")
+boot_obj <- boot(main_data , t_correlation  , R = 1000, mvars=current_vars)
+ci <- boot.ci( boot_obj, conf = 0.95, type="perc")
+df <- data.frame(variable1 = current_vars[1], variable2 =current_vars[2], correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5])
+
+current_vars <- c("drager", "ir")
+boot_obj <- boot(main_data , t_correlation  , R = 1000, mvars=current_vars)
+ci <- boot.ci( boot_obj, conf = 0.95, type="perc")
+df <- rbind(df ,data.frame(variable1 = current_vars[1], variable2 =current_vars[2], correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5]) )
+
+current_vars <- c("oral", "ir")
+boot_obj <- boot(main_data , t_correlation  , R = 1000, mvars=current_vars)
+ci <- boot.ci( boot_obj, conf = 0.95, type="perc")
+df <- rbind(df ,data.frame(variable1 = current_vars[1], variable2 =current_vars[2], correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5]) )
+
+## same thing dropping t=0
+t_correlation <- function(data,indices, mvars) {
+  functional_longify(data, indices) %>% 
+  pivot_wider(id_cols = one_of("Case_Number", "timepoint" ), names_from="source", values_from="temper"  ) %>%
+  filter(timepoint>0) %>%  select(one_of(mvars)) %>% 
+  mutate_all( function(x){if_else(x<34, NA_real_, x) }) -> data
+  cor(data[, 1], data[, 2], use="pairwise")
+}
+
+current_vars <- c("drager", "oral")
+boot_obj <- boot(main_data , t_correlation  , R = 1000, mvars=current_vars)
+ci <- boot.ci( boot_obj, conf = 0.95, type="perc")
+df <- rbind(df ,data.frame(variable1 = current_vars[1], variable2 =current_vars[2], correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5]) )
+
+current_vars <- c("drager", "ir")
+boot_obj <- boot(main_data , t_correlation  , R = 1000, mvars=current_vars)
+ci <- boot.ci( boot_obj, conf = 0.95, type="perc")
+df <- rbind(df ,data.frame(variable1 = current_vars[1], variable2 =current_vars[2], correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5]) )
+
+current_vars <- c("oral", "ir")
+boot_obj <- boot(main_data , t_correlation  , R = 1000, mvars=current_vars)
+ci <- boot.ci( boot_obj, conf = 0.95, type="perc")
+df <- rbind(df ,data.frame(variable1 = current_vars[1], variable2 =current_vars[2], correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5]) )
+
+
+df$timepoint <- rep(c("all", "excluding 0"), each=3 ) 
+
+## correlation at only the given timepoint
+t_correlation <- function(data,indices, mvars, timepoint_inc) {
+  functional_longify(data, indices) %>% 
+  pivot_wider(id_cols = one_of("Case_Number", "timepoint" ), names_from="source", values_from="temper"  ) %>%
+  filter(timepoint==timepoint_inc) %>%  select(one_of(mvars)) %>% 
+  mutate_all( function(x){if_else(x<34, NA_real_, x) }) -> data
+  cor(data[, 1], data[, 2], use="pairwise")
+}
+
+for(t0 in c(0, 10, 20,30) ) {
+  current_vars <- c("drager", "oral")
+  boot_obj <- boot(main_data , t_correlation  , R = 1000, mvars=current_vars, timepoint_inc=t0) 
+  ci <- boot.ci( boot_obj, conf = 0.95, type="perc")
+  df <-rbind(df , data.frame(variable1 = current_vars[1], variable2 =current_vars[2], correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5], timepoint=paste(t0) ) )
+  
+  current_vars <- c("drager", "ir")
+  boot_obj <- boot(main_data , t_correlation  , R = 1000, mvars=current_vars, timepoint_inc=t0) 
+  ci <- boot.ci( boot_obj, conf = 0.95, type="perc")
+  df <-rbind(df , data.frame(variable1 = current_vars[1], variable2 =current_vars[2], correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5], timepoint=paste(t0) ) )
+  
+  current_vars <- c("oral", "ir")
+  boot_obj <- boot(main_data , t_correlation  , R = 1000, mvars=current_vars, timepoint_inc=t0) 
+  ci <- boot.ci( boot_obj, conf = 0.95, type="perc")
+  df <-rbind(df , data.frame(variable1 = current_vars[1], variable2 =current_vars[2], correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5], timepoint=paste(t0) ) )
+}
+
+df$correlation %<>% round(2)
+df$lower %<>% round(2)
+df$upper %<>% round(2)
+
+df %>% write_csv("pairwise_correlations.csv")
+# delta_data %>% select(drager, oral, ir) %>% mutate_all( function(x){if_else(x<34, NA_real_, x) } ) %>% as.matrix %>% cov(use="pairwise") %>% round(2)
+
 
 
 
@@ -428,6 +424,9 @@ dev.off()
 
 ddeltas %>% select(drgaer_delta, oral_delta, ir_delta)  %>% as.matrix %>% cor(use="pairwise") %>% round(2) %>% write.csv("pairwise_correlations_changes.csv")
 
+##########
+## Write out "table 1" descriptive data
+##########
 
 library("tableone")
 
