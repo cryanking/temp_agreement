@@ -1,7 +1,5 @@
 "Dockerfile" builds the cryanking/temperature_container on docker hub (digest:sha256:39594b0a044d97bdf8114a7b4bf5567e8b2790808a7284fc7234acfd985e2ffb)
 
-"build.txt", "rinfo.tex", and "r_packages.txt" contain some information on the build environment
-
 Data (if not included) is assumed to be in "ob_temp_working_data.csv" in the folder mounted as /research
 
 The bland-altman style calculation is done by ba_analysis.R
@@ -9,7 +7,7 @@ The bland-altman style calculation is done by ba_analysis.R
 - outputs include 
     - agreement_output.csv with LOA calculations
     - oral_ir_ba.jpg, drager_oral_ba.jpg, drager_ir_ba.jpg BA type plots
-    - pairwise_correlations.csv with raw correlations
+    - pairwise_correlations.csv with raw correlations and bootstrap confidence limits
 
 The Hypothermia incidence calculation is done by hypothermia_incidence.R
 - outputs include
