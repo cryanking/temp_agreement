@@ -171,7 +171,7 @@ abline(h=drager_ir_out[["bias_avg"]] + drager_ir_out[["loa_upper"]]*c(-1,1) , co
 polygon(x=matrix(c(25, -loa_plot_limit, 50,-loa_plot_limit, 50, loa_plot_limit, 25,loa_plot_limit ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
 
 ## same figure but scatterplots instead of BA plots
-delta_data %>% filter(ir > 34) %>% filter(drager > 34) %>% mutate(x=ir, y=drager) %>% {plot(x=.$x, y=.$y, xlab="IR", ylab="Drager", main="Drager versus IR", type="p")}
+delta_data %>% filter(ir > 34) %>% filter(drager > 34) %>% mutate(x=ir, y=drager) %>% {plot(x=.$x, y=.$y, xlab="IR", ylab="Drager", main="Drager versus IR", type="p", xlim=c(34,39), ylim=c(34,39))}
 ## LMER repeated measures analysis for the trendline
 rm_glm <- delta_data %>% filter(drager > 34) %>% filter(ir > 34)%>% lmer(drager~ir+(1|Case_Number), data=.)
 abline(a= rm_glm %>% summary %>% extract2("coefficients") %>% extract(1,1) , b=rm_glm %>% summary %>% extract2("coefficients") %>% extract(2,1) , col="red")
@@ -191,7 +191,7 @@ abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["loa_lower"]]*c(-1,1) 
 abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["loa_upper"]]*c(-1,1) , col=mycol2)
 polygon(x=matrix(c(25, -loa_plot_limit, 50,-loa_plot_limit, 50, loa_plot_limit, 25,loa_plot_limit  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
 
-delta_data %>% filter(oral > 34) %>% filter(drager > 34) %>% mutate(x=oral, y=drager) %>% {plot(x=.$x, y=.$y, xlab="Oral", ylab="Drager", main="Drager versus Oral", type="p")}
+delta_data %>% filter(oral > 34) %>% filter(drager > 34) %>% mutate(x=oral, y=drager) %>% {plot(x=.$x, y=.$y, xlab="Oral", ylab="Drager", main="Drager versus Oral", type="p", xlim=c(34,39), ylim=c(34,39))}
 rm_glm <- delta_data %>% filter(drager > 34) %>% filter(oral > 34)%>% lmer(drager~oral+(1|Case_Number), data=.)
 abline(a= rm_glm %>% summary %>% extract2("coefficients") %>% extract(1,1) , b=rm_glm %>% summary %>% extract2("coefficients") %>% extract(2,1)  , col="red")
 polygon(x=matrix(c(25,25-loa_plot_limit, 50,50-loa_plot_limit, 50, 50+loa_plot_limit,25,25+loa_plot_limit  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
@@ -209,7 +209,7 @@ abline(h=ir_oral_out[["bias_avg"]] + ir_oral_out[["loa_lower"]]*c(-1,1) , col=my
 abline(h=ir_oral_out[["bias_avg"]] + ir_oral_out[["loa_upper"]]*c(-1,1) , col=mycol2)
 polygon(x=matrix(c(25, -loa_plot_limit, 50,-loa_plot_limit, 50, loa_plot_limit, 25,loa_plot_limit  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
 
-delta_data %>% filter(oral > 34) %>% filter(ir > 34) %>% mutate(x=ir, y=oral) %>% {plot(x=.$x, y=.$y, xlab="IR", ylab="Oral", main="Oral versus IR", type="p")}
+delta_data %>% filter(oral > 34) %>% filter(ir > 34) %>% mutate(x=ir, y=oral) %>% {plot(x=.$x, y=.$y, xlab="IR", ylab="Oral", main="Oral versus IR", type="p", xlim=c(34,39), ylim=c(34,39))}
 rm_glm <- delta_data %>% filter(ir > 34) %>% filter(oral > 34)%>% lmer(oral~ir+(1|Case_Number), data=.)
 abline(a= rm_glm %>% summary %>% extract2("coefficients") %>% extract(1,1) , b=rm_glm %>% summary %>% extract2("coefficients") %>% extract(2,1) , col="red")
 polygon(x=matrix(c(25,25-loa_plot_limit, 50,50-loa_plot_limit, 50, 50+loa_plot_limit,25,25+loa_plot_limit  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
@@ -284,23 +284,28 @@ t_correlation <- function(data,indices, mvars) {
   pivot_wider(id_cols = one_of("Case_Number", "timepoint" ), names_from="source", values_from="temper"  ) %>% 
   select(one_of(mvars)) %>% 
   mutate_all( function(x){if_else(x<34, NA_real_, x) }) -> data
-  cor(data[, 1], data[, 2], use="pairwise")
+  c(cor=cor(data[, 1], data[, 2], use="pairwise") , fraction_in_loa=mean(abs(data[,1] - data[,2]) < loa_plot_limit, na.rm=T))
 }
 
 current_vars <- c("drager", "oral")
 boot_obj <- boot(main_data , t_correlation  , R = 1000, mvars=current_vars)
 ci <- boot.ci( boot_obj, conf = 0.95, type="perc")
-df <- data.frame(variable1 = current_vars[1], variable2 =current_vars[2], correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5])
+ci2 <- boot.ci( boot_obj, conf = 0.95, type="perc", index=2)
+df <- data.frame(variable1 = current_vars[1], variable2 =current_vars[2], correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5], loa_success=ci2$t0, loa_success_lower=ci2$percent[4], loa_success_upper = ci2$percent[5])
+
+
 
 current_vars <- c("drager", "ir")
 boot_obj <- boot(main_data , t_correlation  , R = 1000, mvars=current_vars)
 ci <- boot.ci( boot_obj, conf = 0.95, type="perc")
-df <- rbind(df ,data.frame(variable1 = current_vars[1], variable2 =current_vars[2], correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5]) )
+ci2 <- boot.ci( boot_obj, conf = 0.95, type="perc", index=2)
+df <- rbind(df ,data.frame(variable1 = current_vars[1], variable2 =current_vars[2], correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5], loa_success=ci2$t0, loa_success_lower=ci2$percent[4], loa_success_upper = ci2$percent[5]) )
 
 current_vars <- c("oral", "ir")
 boot_obj <- boot(main_data , t_correlation  , R = 1000, mvars=current_vars)
 ci <- boot.ci( boot_obj, conf = 0.95, type="perc")
-df <- rbind(df ,data.frame(variable1 = current_vars[1], variable2 =current_vars[2], correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5]) )
+ci2 <- boot.ci( boot_obj, conf = 0.95, type="perc", index=2)
+df <- rbind(df ,data.frame(variable1 = current_vars[1], variable2 =current_vars[2], correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5], loa_success=ci2$t0, loa_success_lower=ci2$percent[4], loa_success_upper = ci2$percent[5]) )
 
 ## same thing dropping t=0
 t_correlation <- function(data,indices, mvars) {
@@ -308,23 +313,26 @@ t_correlation <- function(data,indices, mvars) {
   pivot_wider(id_cols = one_of("Case_Number", "timepoint" ), names_from="source", values_from="temper"  ) %>%
   filter(timepoint>0) %>%  select(one_of(mvars)) %>% 
   mutate_all( function(x){if_else(x<34, NA_real_, x) }) -> data
-  cor(data[, 1], data[, 2], use="pairwise")
+  c(cor=cor(data[, 1], data[, 2], use="pairwise") , fraction_in_loa=mean(abs(data[,1] - data[,2]) < loa_plot_limit, na.rm=T))
 }
 
 current_vars <- c("drager", "oral")
 boot_obj <- boot(main_data , t_correlation  , R = 1000, mvars=current_vars)
 ci <- boot.ci( boot_obj, conf = 0.95, type="perc")
-df <- rbind(df ,data.frame(variable1 = current_vars[1], variable2 =current_vars[2], correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5]) )
+ci2 <- boot.ci( boot_obj, conf = 0.95, type="perc", index=2)
+df <- rbind(df ,data.frame(variable1 = current_vars[1], variable2 =current_vars[2], correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5], loa_success=ci2$t0, loa_success_lower=ci2$percent[4], loa_success_upper = ci2$percent[5]) )
 
 current_vars <- c("drager", "ir")
 boot_obj <- boot(main_data , t_correlation  , R = 1000, mvars=current_vars)
 ci <- boot.ci( boot_obj, conf = 0.95, type="perc")
-df <- rbind(df ,data.frame(variable1 = current_vars[1], variable2 =current_vars[2], correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5]) )
+ci2 <- boot.ci( boot_obj, conf = 0.95, type="perc", index=2)
+df <- rbind(df ,data.frame(variable1 = current_vars[1], variable2 =current_vars[2], correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5], loa_success=ci2$t0, loa_success_lower=ci2$percent[4], loa_success_upper = ci2$percent[5]) )
 
 current_vars <- c("oral", "ir")
 boot_obj <- boot(main_data , t_correlation  , R = 1000, mvars=current_vars)
 ci <- boot.ci( boot_obj, conf = 0.95, type="perc")
-df <- rbind(df ,data.frame(variable1 = current_vars[1], variable2 =current_vars[2], correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5]) )
+ci2 <- boot.ci( boot_obj, conf = 0.95, type="perc", index=2)
+df <- rbind(df ,data.frame(variable1 = current_vars[1], variable2 =current_vars[2], correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5], loa_success=ci2$t0, loa_success_lower=ci2$percent[4], loa_success_upper = ci2$percent[5]) )
 
 
 df$timepoint <- rep(c("all", "excluding 0"), each=3 ) 
@@ -335,29 +343,35 @@ t_correlation <- function(data,indices, mvars, timepoint_inc) {
   pivot_wider(id_cols = one_of("Case_Number", "timepoint" ), names_from="source", values_from="temper"  ) %>%
   filter(timepoint==timepoint_inc) %>%  select(one_of(mvars)) %>% 
   mutate_all( function(x){if_else(x<34, NA_real_, x) }) -> data
-  cor(data[, 1], data[, 2], use="pairwise")
+  c(cor=cor(data[, 1], data[, 2], use="pairwise") , fraction_in_loa=mean(abs(data[,1] - data[,2]) < loa_plot_limit, na.rm=T))
 }
 
 for(t0 in c(0, 10, 20,30) ) {
   current_vars <- c("drager", "oral")
   boot_obj <- boot(main_data , t_correlation  , R = 1000, mvars=current_vars, timepoint_inc=t0) 
   ci <- boot.ci( boot_obj, conf = 0.95, type="perc")
-  df <-rbind(df , data.frame(variable1 = current_vars[1], variable2 =current_vars[2], correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5], timepoint=paste(t0) ) )
+  ci2 <- boot.ci( boot_obj, conf = 0.95, type="perc", index=2)
+  df <-rbind(df , data.frame(variable1 = current_vars[1], variable2 =current_vars[2], correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5], loa_success=ci2$t0, loa_success_lower=ci2$percent[4], loa_success_upper = ci2$percent[5], timepoint=paste(t0) ) )
   
   current_vars <- c("drager", "ir")
   boot_obj <- boot(main_data , t_correlation  , R = 1000, mvars=current_vars, timepoint_inc=t0) 
   ci <- boot.ci( boot_obj, conf = 0.95, type="perc")
-  df <-rbind(df , data.frame(variable1 = current_vars[1], variable2 =current_vars[2], correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5], timepoint=paste(t0) ) )
+  ci2 <- boot.ci( boot_obj, conf = 0.95, type="perc", index=2)
+  df <-rbind(df , data.frame(variable1 = current_vars[1], variable2 =current_vars[2], correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5], loa_success=ci2$t0, loa_success_lower=ci2$percent[4], loa_success_upper = ci2$percent[5], timepoint=paste(t0) ) )
   
   current_vars <- c("oral", "ir")
   boot_obj <- boot(main_data , t_correlation  , R = 1000, mvars=current_vars, timepoint_inc=t0) 
   ci <- boot.ci( boot_obj, conf = 0.95, type="perc")
-  df <-rbind(df , data.frame(variable1 = current_vars[1], variable2 =current_vars[2], correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5], timepoint=paste(t0) ) )
+  ci2 <- boot.ci( boot_obj, conf = 0.95, type="perc", index=2)
+  df <-rbind(df , data.frame(variable1 = current_vars[1], variable2 =current_vars[2], correlation = ci$t0, lower = ci$percent[4], upper = ci$percent[5], loa_success=ci2$t0, loa_success_lower=ci2$percent[4], loa_success_upper = ci2$percent[5], timepoint=paste(t0) ) )
 }
 
 df$correlation %<>% round(2)
 df$lower %<>% round(2)
 df$upper %<>% round(2)
+df$loa_success %<>% round(2)
+df$loa_success_lower %<>% round(2)
+df$loa_success_upper %<>% round(2)
 
 df %>% write_csv("pairwise_correlations.csv")
 # delta_data %>% select(drager, oral, ir) %>% mutate_all( function(x){if_else(x<34, NA_real_, x) } ) %>% as.matrix %>% cov(use="pairwise") %>% round(2)
@@ -367,6 +381,8 @@ df %>% write_csv("pairwise_correlations.csv")
 
 ###################
 ## reshape to calculate the change over the 30 minutes and delta of that
+## we decided not to include this analysis because of issues with t=0
+###################
 delta_data %>% group_by(Case_Number) %>% summarize( across(starts_with("delta"), function(x) {last(na.omit(x) ) - first(na.omit(x))} )) -> ddeltas
 
 
