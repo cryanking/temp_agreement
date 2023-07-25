@@ -147,7 +147,7 @@ myplot <- ggplot(delta_data %>% filter(timepoint < 40) %>% mutate(timepoint= pas
   facet_wrap( vars(timepoint)) + theme_minimal() +
   theme(strip.background = element_blank(),
         strip.text = element_text(face = "bold")) +
-  labs(x = "Drager Temperature", y = "Usual Temperature")
+  labs(x = "Heat Flux Temperature", y = "Usual Temperature")
 ggsave("scatterplot_figure.pdf", myplot)
 
 ## to improve visualization, truncate out some outliers
@@ -158,7 +158,7 @@ ggsave("scatterplot_figure_lim.pdf", myplot + coord_cartesian(ylim = c(34,39), x
 ## filter out impossibly low temps (< 34) from the figure
 jpeg("drager_ir_ba.jpg", res=300, width=12, height=6, units="in")
 par(mfrow=c(1,2))
-delta_data %>% filter(ir > 34) %>% filter(drager > 34) %>% mutate(x=(drager+ir)/2, y=delta1 ) %>% {plot(x=.$x, y=.$y, xlab="average", ylab="difference", main="Drager versus IR", type="p", xlim=c(34,39), ylim=c(-4,4))}
+delta_data %>% filter(ir > 34) %>% filter(drager > 34) %>% mutate(x=(drager+ir)/2, y=delta1 ) %>% {plot(x=.$x, y=.$y, xlab="average", ylab="difference", main="Heat Flux versus IR", type="p", xlim=c(34,39), ylim=c(-4,4))}
 ## horizontal line for the average difference
 abline(h=drager_ir_out[["bias_avg"]] , col="black")
 ## horizontal line for simplistic 95% CI on the average difference
@@ -171,7 +171,7 @@ abline(h=drager_ir_out[["bias_avg"]] + drager_ir_out[["loa_upper"]]*c(-1,1) , co
 polygon(x=matrix(c(25, -loa_plot_limit, 50,-loa_plot_limit, 50, loa_plot_limit, 25,loa_plot_limit ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
 
 ## same figure but scatterplots instead of BA plots
-delta_data %>% filter(ir > 34) %>% filter(drager > 34) %>% mutate(x=ir, y=drager) %>% {plot(x=.$x, y=.$y, xlab="IR", ylab="Drager", main="Drager versus IR", type="p", xlim=c(34,39), ylim=c(34,39))}
+delta_data %>% filter(ir > 34) %>% filter(drager > 34) %>% mutate(x=ir, y=drager) %>% {plot(x=.$x, y=.$y, xlab="IR", ylab="Heat Flux", main="Heat Flux versus IR", type="p", xlim=c(34,39), ylim=c(34,39))}
 ## LMER repeated measures analysis for the trendline
 rm_glm <- delta_data %>% filter(drager > 34) %>% filter(ir > 34)%>% lmer(drager~ir+(1|Case_Number), data=.)
 abline(a= rm_glm %>% summary %>% extract2("coefficients") %>% extract(1,1) , b=rm_glm %>% summary %>% extract2("coefficients") %>% extract(2,1) , col="red")
@@ -183,7 +183,7 @@ dev.off()
 ## same figures for drager and oral
 jpeg("drager_oral_ba.jpg", res=300, width=12, height=6, units="in")
 par(mfrow=c(1,2))
-delta_data  %>% filter(oral > 34) %>% filter(drager > 34) %>% mutate(x=(drager+oral)/2, y=delta2 ) %>% {plot(x=.$x, y=.$y, xlab="average", ylab="difference", main="Drager versus oral", type="p", xlim=c(34,39), ylim=c(-4,4))}
+delta_data  %>% filter(oral > 34) %>% filter(drager > 34) %>% mutate(x=(drager+oral)/2, y=delta2 ) %>% {plot(x=.$x, y=.$y, xlab="average", ylab="difference", main="Heat Flux versus oral", type="p", xlim=c(34,39), ylim=c(-4,4))}
 abline(h=drager_oral_out[["bias_avg"]] , col="black")
 abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["bias_sd"]]*c(-2,2), col=mycol)
 abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["loa_est"]]*c(-1,1) , col="red")
@@ -191,7 +191,7 @@ abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["loa_lower"]]*c(-1,1) 
 abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["loa_upper"]]*c(-1,1) , col=mycol2)
 polygon(x=matrix(c(25, -loa_plot_limit, 50,-loa_plot_limit, 50, loa_plot_limit, 25,loa_plot_limit  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
 
-delta_data %>% filter(oral > 34) %>% filter(drager > 34) %>% mutate(x=oral, y=drager) %>% {plot(x=.$x, y=.$y, xlab="Oral", ylab="Drager", main="Drager versus Oral", type="p", xlim=c(34,39), ylim=c(34,39))}
+delta_data %>% filter(oral > 34) %>% filter(drager > 34) %>% mutate(x=oral, y=drager) %>% {plot(x=.$x, y=.$y, xlab="Oral", ylab="Heat Flux", main="Heat Flux versus Oral", type="p", xlim=c(34,39), ylim=c(34,39))}
 rm_glm <- delta_data %>% filter(drager > 34) %>% filter(oral > 34)%>% lmer(drager~oral+(1|Case_Number), data=.)
 abline(a= rm_glm %>% summary %>% extract2("coefficients") %>% extract(1,1) , b=rm_glm %>% summary %>% extract2("coefficients") %>% extract(2,1)  , col="red")
 polygon(x=matrix(c(25,25-loa_plot_limit, 50,50-loa_plot_limit, 50, 50+loa_plot_limit,25,25+loa_plot_limit  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
@@ -239,7 +239,7 @@ dev.off()
 
 jpeg("drager_oral_ba_no_filter.jpg", res=300, width=12, height=6, units="in")
 par(mfrow=c(1,2))
-delta_data  %>% mutate(x=(drager+oral)/2, y=delta2 ) %>% {plot(x=.$x, y=.$y, xlab="average", ylab="difference", main="Drager versus oral", type="p")}
+delta_data  %>% mutate(x=(drager+oral)/2, y=delta2 ) %>% {plot(x=.$x, y=.$y, xlab="average", ylab="difference", main="Heat Flux versus Oral", type="p")}
 abline(h=drager_oral_out[["bias_avg"]] , col="black")
 abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["bias_sd"]]*c(-2,2), col=mycol)
 abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["loa_est"]]*c(-1,1) , col="red")
@@ -247,7 +247,7 @@ abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["loa_lower"]]*c(-1,1) 
 abline(h=drager_oral_out[["bias_avg"]] + drager_oral_out[["loa_upper"]]*c(-1,1) , col=mycol2)
 polygon(x=matrix(c(25, -loa_plot_limit, 50,-loa_plot_limit, 50, loa_plot_limit, 25,loa_plot_limit  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
 
-delta_data  %>% mutate(x=oral, y=drager) %>% {plot(x=.$x, y=.$y, xlab="Oral", ylab="Drager", main="Drager versus Oral", type="p")}
+delta_data  %>% mutate(x=oral, y=drager) %>% {plot(x=.$x, y=.$y, xlab="Oral", ylab="Heat Flux", main="Heat Flux versus Oral", type="p")}
 rm_glm <- delta_data %>% lmer(drager~oral+(1|Case_Number), data=.)
 abline(a= rm_glm %>% summary %>% extract2("coefficients") %>% extract(1,1) , b=rm_glm %>% summary %>% extract2("coefficients") %>% extract(2,1) , col="red")
 polygon(x=matrix(c(25,25-loa_plot_limit, 50,50-loa_plot_limit, 50, 50+loa_plot_limit,25,25+loa_plot_limit  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
@@ -258,14 +258,14 @@ dev.off()
 
 jpeg("drager_ir_ba_no_filter.jpg", res=300, width=12, height=6, units="in")
 par(mfrow=c(1,2))
-delta_data  %>% mutate(x=(drager+ir)/2, y=delta1 ) %>% {plot(x=.$x, y=.$y, xlab="average", ylab="difference", main="Drager versus IR", type="p")}
+delta_data  %>% mutate(x=(drager+ir)/2, y=delta1 ) %>% {plot(x=.$x, y=.$y, xlab="average", ylab="difference", main="Heat Flux versus IR", type="p")}
 abline(h=drager_ir_out[["bias_avg"]] , col="black")
 abline(h=drager_ir_out[["bias_avg"]] + drager_ir_out[["bias_sd"]]*c(-2,2), col=mycol)
 abline(h=drager_ir_out[["bias_avg"]] + drager_ir_out[["loa_est"]]*c(-1,1) , col="red")
 abline(h=drager_ir_out[["bias_avg"]] + drager_ir_out[["loa_lower"]]*c(-1,1) , col=mycol2)
 abline(h=drager_ir_out[["bias_avg"]] + drager_ir_out[["loa_upper"]]*c(-1,1) , col=mycol2)
 polygon(x=matrix(c(25, -loa_plot_limit, 50,-loa_plot_limit, 50, loa_plot_limit, 25,loa_plot_limit  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
-delta_data  %>% mutate(x=ir, y=drager) %>% {plot(x=.$x, y=.$y, xlab="IR", ylab="Drager", main="Drager versus IR", type="p")}
+delta_data  %>% mutate(x=ir, y=drager) %>% {plot(x=.$x, y=.$y, xlab="IR", ylab="Heat Flux", main="Heat Flux versus IR", type="p")}
 
 rm_glm <- delta_data %>% lmer(drager~ir+(1|Case_Number), data=.)
 abline(a= rm_glm %>% summary %>% extract2("coefficients") %>% extract(1,1) , b=rm_glm %>% summary %>% extract2("coefficients") %>% extract(2,1) , col="red")
@@ -395,14 +395,14 @@ semean <- function(x){sd(x, na.rm=TRUE)/sqrt(sum(is.finite(x)))}
 
 jpeg("changes_drager_ir_ba_no_filter.jpeg", res=300, width=12, height=6, units="in")
 par(mfrow=c(1,2))
-ddeltas %>% mutate(x=(drgaer_delta+ir_delta)/2, y=delta1 ) %>% {plot(x=.$x, y=.$y, xlab="average", ylab="difference", main="Drager versus IR", type="p")}
+ddeltas %>% mutate(x=(drgaer_delta+ir_delta)/2, y=delta1 ) %>% {plot(x=.$x, y=.$y, xlab="average", ylab="difference", main="Heat Flux versus IR", type="p")}
 
 abline(h=ddeltas[["delta1"]] %>% mean , col="black")
 abline(h=ddeltas[["delta1"]] %>% mean + ddeltas[["delta1"]] %>% semean %>% multiply_by(c(-2,2)), col=mycol)
 
 abline(h=ddeltas[["delta1"]] %>% mean + ddeltas[["delta1"]] %>%sd %>% multiply_by(c(-2,2)) , col="red")
 
-ddeltas  %>% mutate(x=ir_delta, y=drgaer_delta) %>% {plot(x=.$x, y=.$y, xlab="IR", ylab="Drager", main="Drager versus IR", type="p")}
+ddeltas  %>% mutate(x=ir_delta, y=drgaer_delta) %>% {plot(x=.$x, y=.$y, xlab="IR", ylab="Heat Flux", main="Heat Flux versus IR", type="p")}
 abline(0,1)
 ddeltas %>% lm(drgaer_delta~ir_delta, data=.) %>%  abline(col="red")
 
@@ -410,14 +410,14 @@ dev.off()
 
 jpeg("changes_frager_oral_ba_no_filter.jpeg", res=300, width=12, height=6, units="in")
 par(mfrow=c(1,2))
-ddeltas %>% mutate(x=(drgaer_delta+oral_delta)/2, y=delta2 ) %>% {plot(x=.$x, y=.$y, xlab="average", ylab="difference", main="Drager versus oral", type="p")}
+ddeltas %>% mutate(x=(drgaer_delta+oral_delta)/2, y=delta2 ) %>% {plot(x=.$x, y=.$y, xlab="average", ylab="difference", main="Heat Flux versus Oral", type="p")}
 
 abline(h=ddeltas[["delta2"]] %>% mean , col="black")
 abline(h=ddeltas[["delta2"]] %>% mean + ddeltas[["delta2"]] %>% semean %>% multiply_by(c(-2,2)), col=mycol)
 
 abline(h=ddeltas[["delta2"]] %>% mean + ddeltas[["delta2"]] %>%sd %>% multiply_by(c(-2,2)) , col="red")
 
-ddeltas  %>% mutate(x=oral_delta, y=drgaer_delta) %>% {plot(x=.$x, y=.$y, xlab="oral", ylab="Drager", main="Drager versus oral", type="p")}
+ddeltas  %>% mutate(x=oral_delta, y=drgaer_delta) %>% {plot(x=.$x, y=.$y, xlab="oral", ylab="Heat Flux", main="Heat Flux versus Oral", type="p")}
 abline(0,1)
 ddeltas %>% lm(drgaer_delta~oral_delta, data=.) %>%  abline(col="red")
 
