@@ -71,13 +71,13 @@ functional_longify <- function(data, indicies=NULL) {
   }
   
   ## require 3/5 the first points to be present 
-  data %<>% filter(  is.na(t_drager_40)+is.na(t_drager_30)+is.na(t_drager_20)+is.na(t_drager_10)+is.na(t_drager_00)  < 3 )
+#   data %<>% filter(  is.na(t_drager_40)+is.na(t_drager_30)+is.na(t_drager_20)+is.na(t_drager_10)+is.na(t_drager_00)  < 3 )
   
   data %<>% select( c(one_of("Case_Number"), contains("t_drager"),  contains("t_ir"), contains("t_oral") ) )
   data %<>% select( -t_drager_arr,-t_drager_lve )
  
   ## filter out changes of > 1 degree in the first 10 minutes 
-  data %<>% mutate(t_drager_00 = if_else( abs(t_drager_00-t_drager_10) > 1, t_drager_10, t_drager_00  ) )
+#   data %<>% mutate(t_drager_00 = if_else( abs(t_drager_00-t_drager_10) > 1, t_drager_10, t_drager_00  ) )
 
   data %<>% pivot_longer(cols=contains("t_"), names_to=c("source","timepoint"), names_prefix="t_", names_sep="_", values_to="temper")
   data$timepoint %<>% as.numeric
@@ -113,6 +113,8 @@ main_data %>% functional_longify  %>% pivot_wider(id_cols = one_of("Case_Number"
   ir_oral_out <- loa_from_fit(ir_oral_fit)
 #   ir_oral_out %>% round(2)
 
+overal_output <- bind_rows(drager_ir_out, drager_oral_out, ir_oral_out)
+overal_output %<>% mutate( comparison= c("drager_vs_ir", "drager_vs_oral", "ir_vs_oral") )
 
 ##########
 ## Refit models excluding t0 because there were concerns about drager not having equilibrated
@@ -121,13 +123,31 @@ main_data %>% functional_longify  %>% pivot_wider(id_cols = one_of("Case_Number"
   drager_oral_out0 <- lmer( delta2~factor(timepoint) + (1|Case_Number) , data=delta_data %>% filter(timepoint>0) ) %>% loa_from_fit
   ir_oral_out0 <- lmer( delta3~factor(timepoint) + (1|Case_Number) , data=delta_data %>% filter(timepoint>0) ) %>% loa_from_fit
 
-
-overal_output <- bind_rows(drager_ir_out, drager_oral_out, ir_oral_out)
-overal_output %<>% mutate( comparison= c("drager_vs_ir", "drager_vs_oral", "ir_vs_oral") )
 overal_output0 <- bind_rows(drager_ir_out0, drager_oral_out0, ir_oral_out0)
 overal_output0 %<>% mutate( comparison= c("drager_vs_ir_gt0", "drager_vs_oral_gt0", "ir_vs_oral_gt0") )
-overal_output <-bind_rows(overal_output,overal_output0)
+
+##########
+## Refit models excluding implausible points
+##########
+drop_34 <- function(x) if_else(x < 34, NA_real_, x)
+
+main_data %>% functional_longify  %>% pivot_wider(id_cols = one_of("Case_Number", "timepoint" ), names_from="source", values_from="temper"  ) %>% mutate(drager = drop_34(drager), ir = drop_34(ir), oral=drop_34(oral) ) %>% mutate(delta1=drager-ir, delta2=drager-oral, delta3=oral-ir) -> delta_data2
+
+  drager_ir_out34 <- lmer( delta1~factor(timepoint) + (1|Case_Number) , data=delta_data2  ) %>% loa_from_fit
+  drager_oral_out34 <- lmer( delta2~factor(timepoint) + (1|Case_Number) , data=delta_data2  ) %>% loa_from_fit
+  ir_oral_out34 <- lmer( delta3~factor(timepoint) + (1|Case_Number) , data=delta_data2 ) %>% loa_from_fit
+
+overal_output34 <- bind_rows(drager_ir_out34, drager_oral_out34, ir_oral_out34)
+overal_output34 %<>% mutate( comparison= c("drager_vs_ir_gt34", "drager_vs_oral_gt34", "ir_vs_oral_gt34") )
+
+
+
+overal_output <-bind_rows(overal_output,overal_output0, overal_output34)
 overal_output %>% write_csv("agreement_output.csv")
+
+
+main_data %>% functional_longify  %>% pivot_wider(id_cols = one_of("Case_Number", "timepoint" ), names_from="source", values_from="temper"  ) %>% summarize( dragerlt34 = sum(drager< 34, na.rm=T), irlt34 = sum(ir<34, na.rm=T), orallt34=sum(oral<34, na.rm=T) )
+
 
 ##########
 ## pictures
