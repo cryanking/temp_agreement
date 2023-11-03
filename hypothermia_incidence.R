@@ -406,8 +406,22 @@ cont_vars <- c(
 "APGAR_5min" 
 )
 
-main_data %<>% mutate(across(one_of(cont_vars), as.numeric ))
+
+## fix a number of typographic errors
+main_data %<>% mutate(across(one_of(cont_vars), 
+  . %>% gsub(pattern="[oO]", replacement="0") %>% 
+    sub(pattern="..", replacement=".", fixed=T) %>%  
+    sub(pattern=">", replacement=".", fixed=T) %>%  
+    sub(pattern="I", replacement="1", fixed=T) %>%  
+    as.numeric ))
+
+
+main_data %<>% mutate(BMI = as.numeric(Weight)/((as.numeric(Height)/100)^2 ) )
+
+
+
 main_data[["Co-morb"]] %<>% tolower
+cont_vars %<>% setdiff(c("Weight", "Height") ) %>% c("BMI")
 
 cat_vars <- c(
 "Singleton"            ,
