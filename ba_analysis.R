@@ -89,6 +89,10 @@ functional_longify <- function(data, indicies=NULL) {
 ## pivot long then wider and compute the 3 sets of differences between sensors
 main_data %>% functional_longify  %>% pivot_wider(id_cols = one_of("Case_Number", "timepoint" ), names_from="source", values_from="temper"  ) %>% mutate(delta1=drager-ir, delta2=drager-oral, delta3=oral-ir) -> delta_data
 
+
+
+
+
 ##########
 ## linear mixed effects models for each set of differences
 ## with only 4 timepoints, just make time categorical with no parametric personal trends
@@ -148,6 +152,17 @@ overal_output %>% write_csv("agreement_output.csv")
 
 main_data %>% functional_longify  %>% pivot_wider(id_cols = one_of("Case_Number", "timepoint" ), names_from="source", values_from="temper"  ) %>% summarize( dragerlt34 = sum(drager< 34, na.rm=T), irlt34 = sum(ir<34, na.rm=T), orallt34=sum(oral<34, na.rm=T) )
 
+delta_data%>% filter(timepoint<40) %>% mutate(across(one_of('drager','ir', 'oral' ) , . %>% between(left=34,right=36 ) ) ) %>%  group_by(Case_Number) %>% summarize( across( any_of(c("drager","ir","oral")) , . %>% any(na.rm=T) ) ) %>%  summarize( across( any_of(c("drager","ir","oral")) , list(mean, . %>% table %>% rev %>% binom.test %>% extract2("conf.int") %>% extract(1), . %>% table %>% rev %>% binom.test %>% extract2("conf.int") %>% extract(2) ) ) )
+
+
+# delta_data%>% filter(timepoint<40) %>% mutate(across(one_of('drager','ir', 'oral' ) , . %>% between(left=34,right=36 ) ) ) %>%  group_by(Case_Number) %>% summarize( across( any_of(c("drager","ir","oral")) , . %>% any(na.rm=T) ) ) %>%  summarize( across( any_of(c("drager","ir","oral")) , list(mean, sum, length ) ) )
+
+
+delta_data%>% filter(timepoint<40) %>% mutate(across(one_of('drager','ir', 'oral' ) , . %>% between(left=0,right=36 ) ) ) %>%  group_by(Case_Number) %>% summarize( across( any_of(c("drager","ir","oral")) , . %>% any(na.rm=T) ) ) %>%  summarize( across( any_of(c("drager","ir","oral")) , list(mean, . %>% table %>% rev %>% binom.test %>% extract2("conf.int") %>% extract(1), . %>% table %>% rev %>% binom.test %>% extract2("conf.int") %>% extract(2) ) ) )
+
+
+# dragerlt36 = any( drager, na.rm=T), irlt36 = any(ir, na.rm=T), orallt36=any(oral, na.rm=T) ) %>% summarize( across( any_of(c("dragerlt36","irlt36","orallt36")) , mean) )
+
 
 ##########
 ## pictures
@@ -156,6 +171,204 @@ loa_plot_limit <- 0.5
 mycol <- rgb(0, 0, 0 , max = 255, alpha = 100, names = "black50")
 mycol2 <- rgb(255, 0, 0 , max = 255, alpha = 100, names = "red50")
 mycol3 <- rgb(0, 0, 255 , max = 255, alpha = 50, names = "blue25")
+mycol4 <- rgb(0, 255, 0 , max = 255, alpha = 50, names = "green25")
+mycol5 <- rgb(255, 255, 0 , max = 255, alpha = 50, names = "yellow25")
+
+#########
+## a simple error grid analysis https://link.springer.com/article/10.1007/s10877-022-00851-z, https://www.nature.com/articles/s41598-020-78753-w
+## Zone a: < +- 0.5 from average
+##         both < 36, both > 38
+##      b: > 0.5 but neither "flags"
+##      c: larger than > 0.5 and flags !=
+if(FALSE) {
+# plot(c(0,0), xlim=c(34,39), ylim=c(-4,4), type="n")
+
+## green yellow boundary
+## minimal point from above
+segments( x0 = 36.0-0.25, y0=0.5, x1=34, y1=4 )
+## minimal point from below
+segments( x0 = 36.0-0.25, y0=-0.5, x1=34, y1=-4 )
+## hyperthermic
+segments( x0 = 38.0+0.25, y0=0.5, x1=42, y1=8 )
+segments( x0 = 38.0+0.25, y0=-0.5, x1=42, y1=-8 )
+## agreement between
+segments( x0 = 36.0-.25, x1=38+.25, y0=0.5, y1=0.5)
+segments( x0 = 36.0-.25, x1=38+.25, y0=-0.5, y1=-0.5)
+
+## yellow red boundary
+segments( x0 = 36.0+.25, x1=37, y0=0.5, y1=2.0)
+segments( x0 = 37, x1=37.75, y0=2, y1=.5)
+
+segments( x0 = 36.0+.25, x1=37, y0=-0.5, y1=-2.0)
+segments( x0 = 37, x1=37.75, y0=-2, y1=-.5)
+
+## as a polygon
+upper_red <- matrix( c(
+33, 6 ,
+35.75, .5, 
+36.25, .5,
+37, 2, 
+37.75, .5 ,
+38.25 ,.5 ,
+42, 8
+) , byrow=T, ncol=2)
+lower_red <- cbind(upper_red[,1], -upper_red[,2])
+
+polygon(x=upper_red, col=mycol2)
+polygon(x=lower_red, col=mycol2)
+
+
+green_all <- matrix( c(
+33, 6 ,
+35.75, .5, 
+38.25 ,.5 ,
+42, 8,
+42, -8 ,
+38.25 ,-.5 ,
+35.75, -.5, 
+33, -6 
+) , byrow=T, ncol=2)
+polygon(x=green_all, col=mycol4)
+
+
+upper_yellow <- matrix( c(
+36.25, .5,
+37, 2, 
+37.75, .5 
+) , byrow=T, ncol=2)
+lower_yellow <- cbind(upper_yellow[,1], -upper_yellow[,2])
+polygon(x=upper_yellow, col=mycol5)
+polygon(x=lower_yellow, col=mycol5)
+
+## stochastically checking the EGA boundaries
+
+error_class <- function(x1, x2) {  case_when( 
+  abs(x1-x2)<0.5 ~ "green" ,
+  x1 <  36 & x2 < 36 ~ "green" ,
+  x1 >  38 & x2 > 38 ~ "green" ,
+  abs(x1-x2) > 0.5 & x1 >  38 & x2< 38 ~ "red" ,
+  abs(x1-x2) > 0.5 & x2 >  38 & x1< 38 ~ "red" ,
+  abs(x1-x2) > 0.5 & x1 >  36 & x2< 36 ~ "red" ,
+  abs(x1-x2) > 0.5 & x2 >  36 & x1< 36 ~ "red" ,
+  TRUE ~ "yellow"
+)}
+
+plot(c(0,0), xlim=c(34,39), ylim=c(-4,4), type="n")
+tempx <- runif(10000, min=32, max=42)
+tempy <- runif(10000, min=32, max=42)
+points((tempx+tempy)/2, tempx-tempy, col=error_class(tempx, tempy), pch=19)
+
+## in native coordinates
+plot(c(0,0), xlim=c(34,42), ylim=c(34,42), type="n")
+points(tempx,tempy,col=error_class(tempx, tempy), pch=19)
+
+
+upper_red <- matrix( c(
+32, 36 ,
+35.5, 36, 
+36.0, 36.5,
+36.0, 38.0, 
+37.5, 38.0 ,
+38.0 ,38.5 ,
+38.0, 42,
+32, 42
+) , byrow=T, ncol=2)
+
+
+lower_red <- cbind(upper_red[,2] , upper_red[,1] )
+
+polygon(x=upper_red, col=mycol2)
+polygon(x=lower_red, col=mycol2)
+
+upper_yellow <- matrix( c(
+36.0, 36.5,
+36.0, 38.0, 
+37.5, 38.0 
+) , byrow=T, ncol=2)
+
+lower_yellow <- cbind(upper_yellow[,2], upper_yellow[,1])
+polygon(x=upper_yellow, col=mycol5)
+polygon(x=lower_yellow, col=mycol5)
+
+
+
+}
+
+## a code snipped to do the EGA 
+ega_altman <- function(x) {
+upper_red <- matrix( c(
+33, 6 ,
+35.75, .5, 
+36.25, .5,
+37, 2, 
+37.75, .5 ,
+38.25 ,.5 ,
+42, 8
+) , byrow=T, ncol=2)
+lower_red <- cbind(upper_red[,1], -upper_red[,2])
+
+polygon(x=upper_red, col=mycol2)
+polygon(x=lower_red, col=mycol2)
+
+
+green_all <- matrix( c(
+33, 6 ,
+35.75, .5, 
+38.25 ,.5 ,
+42, 8,
+42, -8 ,
+38.25 ,-.5 ,
+35.75, -.5, 
+33, -6 
+) , byrow=T, ncol=2)
+# polygon(x=green_all, col=mycol4)
+
+
+upper_yellow <- matrix( c(
+36.25, .5,
+37, 2, 
+37.75, .5 
+) , byrow=T, ncol=2)
+lower_yellow <- cbind(upper_yellow[,1], -upper_yellow[,2])
+polygon(x=upper_yellow, col=mycol5)
+polygon(x=lower_yellow, col=mycol5)
+return(TRUE)
+}
+
+ega_native <- function(x) {
+
+
+upper_red <- matrix( c(
+32, 36 ,
+35.5, 36, 
+36.0, 36.5,
+36.0, 38.0, 
+37.5, 38.0 ,
+38.0 ,38.5 ,
+38.0, 42,
+32, 42
+) , byrow=T, ncol=2)
+
+
+lower_red <- cbind(upper_red[,2] , upper_red[,1] )
+
+polygon(x=upper_red, col=mycol2)
+polygon(x=lower_red, col=mycol2)
+
+upper_yellow <- matrix( c(
+36.0, 36.5,
+36.0, 38.0, 
+37.5, 38.0 
+) , byrow=T, ncol=2)
+
+lower_yellow <- cbind(upper_yellow[,2], upper_yellow[,1])
+polygon(x=upper_yellow, col=mycol5)
+polygon(x=lower_yellow, col=mycol5)
+
+
+return(TRUE)
+
+}
 
 
 ## a figure of raw data
@@ -305,6 +518,55 @@ abline(a= rm_glm %>% summary %>% extract2("coefficients") %>% extract(1,1) , b=r
 polygon(x=matrix(c(25,25-loa_plot_limit, 50,50-loa_plot_limit, 50, 50+loa_plot_limit,25,25+loa_plot_limit  ) , ncol=2, byrow=TRUE) , col=mycol3, lty=0)
 abline(0,1)
 dev.off()
+
+
+###############
+## same plots with ega instead of confidence limits
+jpeg("combined_ba_ega.jpg", res=300, width=6, height=10, units="in")
+par(mfrow=c(3,2))
+par(mar=c(3,4,3,2) + 0.1)
+par(oma=c(3,3,4,3)) 
+i<-1
+delta_data %>% filter(ir > 34) %>% filter(drager > 34) %>% mutate(x=(drager+ir)/2, y=delta1 ) %>% {plot(x=.$x, y=.$y, xlab="average", ylab="difference", main="Bland-Altman", type="p", xlim=c(34,39), ylim=c(-4,4))}
+## horizontal line for the average difference
+abline(h=drager_ir_out[["bias_avg"]] , col="black")
+ega_altman()
+
+text("A) Heat Flux versus IR" , x= line2user(3.3,2) , y = line2user(3.5,3) ,xpd=NA, cex=1.2, pos=4)
+
+## same figure but scatterplots instead of BA plots
+delta_data %>% filter(ir > 34) %>% filter(drager > 34) %>% mutate(x=ir, y=drager) %>% {plot(x=.$x, y=.$y, xlab="IR", ylab="Heat Flux", main="Scatter plot", type="p", xlim=c(34,39), ylim=c(34,39))}
+## LMER repeated measures analysis for the trendline
+rm_glm <- delta_data %>% filter(drager > 34) %>% filter(ir > 34)%>% lmer(drager~ir+(1|Case_Number), data=.)
+abline(a= rm_glm %>% summary %>% extract2("coefficients") %>% extract(1,1) , b=rm_glm %>% summary %>% extract2("coefficients") %>% extract(2,1) , col="red")
+ega_native()
+
+delta_data  %>% filter(oral > 34) %>% filter(drager > 34) %>% mutate(x=(drager+oral)/2, y=delta2 ) %>% {plot(x=.$x, y=.$y, xlab="average", ylab="difference", main="Bland-Altman", type="p", xlim=c(34,39), ylim=c(-4,4))}
+abline(h=drager_oral_out[["bias_avg"]] , col="black")
+ega_altman()
+
+text("B) Heat Flux versus Oral" , x= line2user(3.3,2) , y = line2user(3.5,3) ,xpd=NA, cex=1.2, pos=4)
+
+delta_data %>% filter(oral > 34) %>% filter(drager > 34) %>% mutate(x=oral, y=drager) %>% {plot(x=.$x, y=.$y, xlab="Oral", ylab="Heat Flux", main="Scatter plot", type="p", xlim=c(34,39), ylim=c(34,39))}
+rm_glm <- delta_data %>% filter(drager > 34) %>% filter(oral > 34)%>% lmer(drager~oral+(1|Case_Number), data=.)
+abline(a= rm_glm %>% summary %>% extract2("coefficients") %>% extract(1,1) , b=rm_glm %>% summary %>% extract2("coefficients") %>% extract(2,1)  , col="red")
+ega_native()
+
+
+delta_data %>% filter(oral > 34) %>% filter(ir > 34) %>% mutate(x=(oral+ir)/2, y=delta3 ) %>% {plot(x=.$x, y=.$y, xlab="average", ylab="difference", main="Bland-Altman", type="p", xlim=c(34,39), ylim=c(-4,4))}
+abline(h=ir_oral_out[["bias_avg"]] , col="black")
+ega_altman()
+
+text("C) Oral versus IR" , x= line2user(3.3,2) , y = line2user(3.5,3) ,xpd=NA, cex=1.2, pos=4)
+
+delta_data %>% filter(oral > 34) %>% filter(ir > 34) %>% mutate(x=ir, y=oral) %>% {plot(x=.$x, y=.$y, xlab="IR", ylab="Oral", main="Scatter plot", type="p", xlim=c(34,39), ylim=c(34,39))}
+rm_glm <- delta_data %>% filter(ir > 34) %>% filter(oral > 34)%>% lmer(oral~ir+(1|Case_Number), data=.)
+abline(a= rm_glm %>% summary %>% extract2("coefficients") %>% extract(1,1) , b=rm_glm %>% summary %>% extract2("coefficients") %>% extract(2,1) , col="red")
+ega_native()
+
+dev.off()
+
+
 
 ###############
 ## same plots without the 34 degree filter
