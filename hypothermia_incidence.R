@@ -13,6 +13,7 @@ library(parallel)
 library(purrr)
 library(magrittr)
 
+
 run_large <- TRUE
 
 set.seed(101)
@@ -332,7 +333,8 @@ real_data <- functional_longify(main_data)
 real_data <- left_join(real_data, re_result[[2]], by=c("Case_Number", "timepoint") )
 
 ## a plot of the smoothing effect
-jpeg("scatter_smoothering.jpg")
+# jpeg("scatter_smoothering.jpg")
+svg("scatter_smoothering.svg")
 plot(real_data$temper, real_data$predictions, xlab="measured temp", ylab="smoothed temp estimate" )
 abline(a=0, b=1, col="red")
 dev.off()
@@ -350,7 +352,8 @@ dev.off()
 mycol <- rgb(0, 0, 0 , maxColorValue = 255, alpha = 100, names = "black50")
 mycol2 <- rgb(255, 0, 0 , maxColorValue = 255, alpha = 80, names = "red50")
 
-jpeg("overlay_variation2.jpeg")
+# jpeg("overlay_variation2.jpeg")
+svg("overlay_variation2.svg")
 
 real_data %>% group_by(timepoint) %>% summarize(smooth_temp=mean(predictions ) ) %>% plot(type="l", lwd=4, ylim=c(35,38), col='red', xlab="time since SA", ylab="smoothed temperature")
 
@@ -362,7 +365,7 @@ polygon( c(ci_measured_holder$timepoint, rev(ci_measured_holder$timepoint)) , c(
 dev.off()
 
 
-png("change_hist.png", res=300, width=4, height=4, units="in")
+svg("change_hist.svg", width=4, height=4, units="in")
 
 re_result[[2]] %>% group_by(Case_Number) %>% summarize(delta0=max_loss(predictions) ) %>% pull("delta0") %>% hist(xlab="greatest temperature change", ylab="count", freq=TRUE, main="")
 dev.off()
