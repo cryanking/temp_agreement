@@ -365,7 +365,7 @@ polygon( c(ci_measured_holder$timepoint, rev(ci_measured_holder$timepoint)) , c(
 dev.off()
 
 
-svg("change_hist.svg", width=4, height=4, units="in")
+svg("change_hist.svg", width=4, height=4)
 
 re_result[[2]] %>% group_by(Case_Number) %>% summarize(delta0=max_loss(predictions) ) %>% pull("delta0") %>% hist(xlab="greatest temperature change", ylab="count", freq=TRUE, main="")
 dev.off()
